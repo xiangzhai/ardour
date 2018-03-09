@@ -317,11 +317,20 @@ class LIBTEMPORAL_API TempoMapPoint
 	bool                dirty()  const { return _dirty; }
 
 	superclock_t        sclock() const      { return _sclock; }
-
 	timepos_t           time() const;
 	samplepos_t         sample() const;
 	Beats const &       quarters() const  { return _quarters; }
 	BBT_Time  const &   bbt() const       { return _bbt; }
+
+	superclock_t        meter_sclock() const   { if (is_explicit_meter()) return sclock(); return _reference->sclock(); }
+	samplepos_t         meter_sample() const   { if (is_explicit_meter()) return sample(); return _reference->sample(); }
+	Beats const &       meter_quarters() const { if (is_explicit_meter()) return quarters(); return _reference->quarters(); }
+	BBT_Time  const &   meter_bbt() const      { if (is_explicit_meter()) return bbt(); return _reference->bbt(); }
+
+	superclock_t        tempo_sclock() const   { if (is_explicit_tempo()) return sclock(); return _reference->sclock(); }
+	samplepos_t         tempo_sample() const   { if (is_explicit_tempo()) return sample(); return _reference->sample(); }
+	Beats const &       tempo_quarters() const { if (is_explicit_tempo()) return quarters(); return _reference->quarters(); }
+	BBT_Time  const &   tempo_bbt() const      { if (is_explicit_tempo()) return bbt(); return _reference->bbt(); }
 
 	bool                ramped() const      { return metric().ramped(); }
 
