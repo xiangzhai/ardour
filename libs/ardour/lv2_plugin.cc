@@ -2698,8 +2698,8 @@ LV2Plugin::connect_and_run(BufferSet& bufs,
 				const samplepos_t sample = superclock_to_samples (tempo_map_point->sclock(), _session.sample_rate());
 
 				while (m != m_end || (tempo_map_point != tempo_map_points.end() && sample < tend)) {
-					TempoMetric const * metric = (tempo_map_point != tempo_map_points.end()) ? &tempo_map_point->metric() : (TempoMetric*) 0;
-					if (m != m_end && (!metric || sample > (*m).time())) {
+
+					if (m != m_end && ((tempo_map_point != tempo_map_points.end()) || sample > (*m).time())) {
 						const Evoral::Event<samplepos_t> ev(*m, false);
 						if (ev.time() < nframes) {
 							LV2_Evbuf_Iterator eend = lv2_evbuf_end(_ev_buffers[port_index]);

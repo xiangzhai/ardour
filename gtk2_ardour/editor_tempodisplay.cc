@@ -179,8 +179,16 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 
 
 void
-Editor::tempo_map_changed (const PropertyChange& /*ignored*/)
+Editor::tempo_map_property_changed (const PropertyChange& /*ignored*/)
 {
+	tempo_map_changed (0, 0);
+}
+
+void
+Editor::tempo_map_changed (samplepos_t, samplepos_t)
+{
+	cerr << "TEMPO MAP CHANGED IN GUI\n";
+
 	if (!_session) {
 		return;
 	}
@@ -422,6 +430,7 @@ Editor::mouse_add_new_meter_event (timepos_t const & position)
 		return;
 	}
 
+	cerr << "create new meter at " << position << endl;
 
 	TempoMap& map(_session->tempo_map());
 	MeterDialog meter_dialog (map, position, _("add"));
@@ -440,6 +449,8 @@ Editor::mouse_add_new_meter_event (timepos_t const & position)
 
 	Temporal::BBT_Time requested;
 	meter_dialog.get_bbt_time (requested);
+
+	cerr << "new meter is at " << requested << endl;
 
 	begin_reversible_command (_("add meter mark"));
 	XMLNode &before = map.get_state();
@@ -558,7 +569,7 @@ Editor::real_remove_tempo_marker (TempoMapPoint const & point)
 {
 	begin_reversible_command (_("remove tempo mark"));
 	XMLNode &before = _session->tempo_map().get_state();
-	_session->tempo_map().remove_tempo_at (point);
+	_session->tempo_map().remove_tempo (point.tempo());
 	XMLNode &after = _session->tempo_map().get_state();
 	_session->add_command(new MementoCommand<TempoMap>(_session->tempo_map(), &before, &after));
 	commit_reversible_command ();
@@ -592,7 +603,7 @@ Editor::real_remove_meter_marker (TempoMapPoint const & point)
 {
 	begin_reversible_command (_("remove tempo mark"));
 	XMLNode &before = _session->tempo_map().get_state();
-	_session->tempo_map().remove_meter_at (point);
+	_session->tempo_map().remove_meter (point.meter());
 	XMLNode &after = _session->tempo_map().get_state();
 	_session->add_command(new MementoCommand<TempoMap>(_session->tempo_map(), &before, &after));
 	commit_reversible_command ();

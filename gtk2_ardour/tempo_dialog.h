@@ -80,7 +80,6 @@ private:
 	gint64 first_t;
 
 	Temporal::TempoMap& _map;
-	Temporal::TempoMetric const & _section;
 
 	Gtk::ComboBoxText pulse_selector;
 	Gtk::Adjustment   bpm_adjustment;

@@ -3403,7 +3403,9 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 				--bbt.bars;
 			}
 
-			if (!map.set_meter (Meter (_marker->meter().divisions_per_bar(), _marker->meter().note_value()), bbt)) {
+			_marker->reset_point (map.set_meter (Meter (_marker->meter().divisions_per_bar(), _marker->meter().note_value()), bbt));
+
+			if (!_point) {
 				aborted (true);
 				return;
 			}
@@ -3474,7 +3476,6 @@ MeterMarkerDrag::aborted (bool moved)
 TempoMarkerDrag::TempoMarkerDrag (Editor* e, ArdourCanvas::Item* i, bool c)
 	: Drag (e, i)
 	, _marker (reinterpret_cast<TempoMarker*> (_item->get_data ("marker")))
-	, _point (&_marker->point())
 	, _copy (c)
 	, _grab_bpm (120.0, 4.0)
 	, _grab_qn (0.0)
@@ -3482,12 +3483,12 @@ TempoMarkerDrag::TempoMarkerDrag (Editor* e, ArdourCanvas::Item* i, bool c)
 {
 	DEBUG_TRACE (DEBUG::Drags, "New TempoMarkerDrag\n");
 
-	_movable = !e->session()->tempo_map().is_initial (*((Meter const *) &_point->metric()));
+	_movable = !e->session()->tempo_map().is_initial (_marker->point().tempo());
 
-	Temporal::TempoMetric const & tm (_point->metric());
+	Temporal::TempoMetric const & tm (_marker->metric());
 
 	_grab_bpm = Tempo (tm.note_types_per_minute(), tm.end_note_types_per_minute(), tm.note_type());
-	_grab_qn = _point->quarters ();
+	_grab_qn = _marker->point().quarters ();
 
 	assert (_marker);
 }
@@ -3497,9 +3498,9 @@ TempoMarkerDrag::start_grab (GdkEvent* event, Gdk::Cursor* cursor)
 {
 	Drag::start_grab (event, cursor);
 
-	_point->start_float ();
+	// _point->start_float ();
 
-	if (!_point->metric().active()) {
+	if (!_marker->point().metric().active()) {
 		show_verbose_cursor_text (_("inactive"));
 	} else {
 		show_verbose_cursor_time (adjusted_current_sample (event));
@@ -3510,13 +3511,13 @@ void
 TempoMarkerDrag::setup_pointer_offset ()
 {
 	/* XXX should not be in samples */
-	_pointer_offset = raw_grab_sample() - _point->sample();
+	_pointer_offset = raw_grab_sample() - _marker->point().sample();
 }
 
 void
 TempoMarkerDrag::motion (GdkEvent* event, bool first_move)
 {
-	if (!_point->metric().active()) {
+	if (!_marker->point().metric().active()) {
 		return;
 	}
 
@@ -3555,17 +3556,15 @@ TempoMarkerDrag::motion (GdkEvent* event, bool first_move)
 
 			_editor->begin_reversible_command (_("copy tempo mark"));
 
-			if (map.time_domain() == Temporal::AudioTime) {
-				_point = map.set_tempo (tempo, sample);
-			} else {
-				Temporal::Beats beats = map.quarter_note_at (sample);
-				_point = map.set_tempo (tempo, beats);
-			}
+			_marker->reset_point (map.set_tempo (_marker->point().tempo(), sample));
 
-			if (!_point) {
+#warning paul, need a return status from set_tempo
+#if 0
+			if (!) {
 				aborted (true);
 				return;
 			}
+#endif
 		}
 
 	}
@@ -3573,7 +3572,7 @@ TempoMarkerDrag::motion (GdkEvent* event, bool first_move)
 	if (ArdourKeyboard::indicates_constraint (event->button.state) && ArdourKeyboard::indicates_copy (event->button.state)) {
 		double new_bpm = max (1.5, _grab_bpm.end_note_types_per_minute() + ((grab_y() - min (-1.0, current_pointer_y())) / 5.0));
 		stringstream strs;
-		_editor->session()->tempo_map().change_tempo (*_point, Tempo (_point->metric().note_types_per_minute(), _point->metric().note_type(), new_bpm));
+		_editor->session()->tempo_map().change_tempo (_marker->point().tempo(), Tempo (_marker->point().metric().note_types_per_minute(), _marker->point().metric().note_type(), new_bpm));
 		strs << "end:" << fixed << setprecision(3) << new_bpm;
 		show_verbose_cursor_text (strs.str());
 
@@ -3581,7 +3580,7 @@ TempoMarkerDrag::motion (GdkEvent* event, bool first_move)
 		/* use vertical movement to alter tempo .. should be log */
 		double new_bpm = max (1.5, _grab_bpm.note_types_per_minute() + ((grab_y() - min (-1.0, current_pointer_y())) / 5.0));
 		stringstream strs;
-		_editor->session()->tempo_map().change_tempo (*_point, Tempo (new_bpm, _point->metric().note_type(), _point->metric().end_note_types_per_minute()));
+		_editor->session()->tempo_map().change_tempo (_marker->point().tempo(), Tempo (new_bpm, _marker->point().tempo().note_type(), _marker->point().tempo().end_note_types_per_minute()));
 		strs << "start:" << fixed << setprecision(3) << new_bpm;
 		show_verbose_cursor_text (strs.str());
 
@@ -3598,9 +3597,9 @@ TempoMarkerDrag::motion (GdkEvent* event, bool first_move)
 			pf = adjusted_current_time (event);
 		}
 
-		map.move_to (*_point, pf);
+		map.move_tempo (_marker->point().tempo(), pf, false);
 
-		show_verbose_cursor_time (_point->sample());
+		show_verbose_cursor_time (_marker->point().sample());
 	}
 
 	_marker->set_position (adjusted_current_time (event, false));
@@ -3609,9 +3608,9 @@ TempoMarkerDrag::motion (GdkEvent* event, bool first_move)
 void
 TempoMarkerDrag::finished (GdkEvent* event, bool movement_occurred)
 {
-	_point->end_float ();
+	// _point->end_float ();
 
-	if (!_point->metric().active()) {
+	if (!_marker->point().metric().active()) {
 		return;
 	}
 	if (!movement_occurred) {
@@ -3635,8 +3634,8 @@ TempoMarkerDrag::finished (GdkEvent* event, bool movement_occurred)
 void
 TempoMarkerDrag::aborted (bool moved)
 {
-	_point->end_float ();
-	_marker->set_position (_point->sample());
+	// _point->end_float ();
+	_marker->set_position (_marker->point().sample());
 
 	if (moved) {
 		TempoMap& map (_editor->session()->tempo_map());
@@ -3938,8 +3937,7 @@ TempoEndDrag::TempoEndDrag (Editor* e, ArdourCanvas::Item* i)
 {
 	DEBUG_TRACE (DEBUG::Drags, "New TempoEndDrag\n");
 	TempoMarker* marker = reinterpret_cast<TempoMarker*> (_item->get_data ("marker"));
-	_point = &marker->point();
-	_grab_qn = _point->quarters ();
+	_grab_qn = marker->point().quarters ();
 }
 
 void

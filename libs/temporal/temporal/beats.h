@@ -395,10 +395,10 @@ private:
 	int32_t _ticks;
 
 	/* almost nobody should ever be allowed to use this method */
-	friend class TempoMetric;
+	friend class TempoPoint;
 	friend class ARDOUR::Variant;
 
-	double  to_double()              const { return (double)_beats + (_ticks / (double)PPQN); }
+	double to_double() const { return (double)_beats + (_ticks / (double)PPQN); }
 };
 
 /*

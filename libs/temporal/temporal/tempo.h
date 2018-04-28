@@ -38,10 +38,116 @@
 #include "temporal/timeline.h"
 #include "temporal/types.h"
 
+/* A tempo map is built from 4 types of entities
+
+   1) points that define tempo
+   2) points that define meter
+   3) points that define the position of a specific beat
+   4) labels attached to points that provide their BBT time
+
+   Each point that defines tempo and meter must also be a point that defines
+   the position of a beat - that is, tempo and meter changes always fall on
+   beat positions. In addition, meter changes must always be on a point that
+   begins a new measure or bar.
+
+   The user can directly manipulate any of these 4 entities.
+
+   Tempo: tempo related properties and position can be changed.
+   Meter: meter related properties and position can be changed.
+   Beat locations: position can be changed.
+   BBT labels: BBT time can be changed.
+
+   All points have a position defined by a superclock_t value.
+
+   Beats increase monotonically throughout the tempo map (BBT may not). Each
+   beat value of a point is 1 beat more than the previous point. Beats start at
+   zero. If the user moved a point, it will retain the same beat value, but
+   will have a new superclock_t position.
+
+   The map has a single time domain at any time, and can only be using either
+   AudioTime or BeatTime. BarTime is not legal as a map time domain.
+
+   When the map is using AudioTime as its time domain, .... [ what? ]
+
+   When the map is using BarTime as its time domain, .... [ what? ]
+
+   The visible tempo map consists of a set of TempoMapPoints, one for every
+   beat spanning a duration from zero to some extent defined by the map's
+   user.
+
+   Rebuilding the map consists of the following steps:
+
+   1) traverse the list of tempos, and recompute any ramps between them
+   2) create a set of "explicit" points from the set of tempo, meter and beat positions
+   3) fill in between them and until the final requested extent with "implicit" points
+
+   This rebuild can theoretically be optimized by only rebuilding from a
+   certain point in time (e.g. the first explicit (or implicit?) point marked "dirty").
+
+
+   Step 1 requires an intermediate data type: a tempo combined with a
+   duration.
+*/
+
+
 namespace Temporal {
 
 class Meter;
 class TempoMap;
+
+/* Conceptually, Point is similar to timepos_t. However, whereas timepos_t can
+ * use the TempoMap to translate between time domains, Point cannot. Why not?
+ * Because Point is foundational in building the tempo map, and we cannot
+ * create a circular functional dependency between them. So a Point always has
+ * its superclock and beat time defined and no translation between them is possible.
+ *
+ * In general, most Points in a TempoMap will use the AudioTime
+ * domain. Currently (March 2018) this is an alias for superclock_t rather than
+ * samples. They are linearly related anyway and at the code (and machine)
+ * level, they are the same type.
+ */
+
+class LIBTEMPORAL_API Point {
+  public:
+	Point (superclock_t sc, Beats const & b, BBT_Time const & bbt) : _sclock (sc), _quarters (b), _bbt (bbt) {}
+	Point (XMLNode const &);
+
+	virtual ~Point() {}
+
+	superclock_t sclock() const      { return _sclock; }
+	virtual void set_sclock (superclock_t sc) { _sclock = sc; }
+
+	Beats const & beats() const { return _quarters; }
+	virtual void  set_beats (Beats const & b) { _quarters = b; }
+
+	BBT_Time const & bbt() const { return _bbt; }
+	virtual void     set_bbt (BBT_Time const & bbt) { _bbt = bbt; }
+
+	struct sclock_comparator {
+		bool operator() (Point const & a, Point const & b) const {
+			return a.sclock() < b.sclock();
+		}
+	};
+
+	struct beat_comparator {
+		bool operator() (Point const & a, Point const & b) const {
+			return a.beats() < b.beats();
+		}
+	};
+
+	struct bbt_comparator {
+		bool operator() (Point const & a, Point const & b) const {
+			return a.bbt() < b.bbt();
+		}
+	};
+
+  protected:
+	superclock_t          _sclock;
+	Beats                 _quarters;
+	BBT_Time              _bbt;
+
+	void add_state (XMLNode &) const;
+};
 
 /** Tempo, the speed at which musical time progresses (BPM).
  */
@@ -178,14 +284,37 @@ class LIBTEMPORAL_API Meter {
 	int8_t _divisions_per_bar;
 };
 
-/** Helper class to keep track of the Meter *AND* Tempo in effect
-    at a given point in time.
-*/
-class LIBTEMPORAL_API TempoMetric : public Tempo, public Meter {
+/* A MeterPoint is literally just the combination of a Meter with a Point
+ */
+class LIBTEMPORAL_API MeterPoint : public Meter, public Point
+{
   public:
-	TempoMetric (Tempo const & t, Meter const & m, bool ramp)
-		: Tempo (t), Meter (m), _c_per_quarter (0.0), _c_per_superclock (0.0) {}
-	~TempoMetric () {}
+	MeterPoint (Meter const & m, superclock_t sc, Beats const & b, BBT_Time const & bbt) : Meter (m), Point (sc, b, bbt) {}
+	MeterPoint (XMLNode const &);
+
+	XMLNode& get_state () const;
+};
+
+/* A TempoPoint is a combination of a Tempo with a Point. However, if the temp
+ * is ramped, then at some point we will need to compute the ramp coefficients
+ * (c-per-quarter and c-per-superclock) and store them so that we can compute
+ * time-at-quarter-note on demand.
+ */
+
+class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
+{
+  public:
+	TempoPoint (Tempo const & t, superclock_t sc, Beats const & b, BBT_Time const & bbt) : Tempo (t), Point (sc, b, bbt), _c_per_quarter (0), _c_per_superclock (0) {}
+	TempoPoint (Tempo const & t, Point const & p) : Tempo (t), Point (p), _c_per_quarter (0), _c_per_superclock (0) {}
+	TempoPoint (XMLNode const &);
+
+	/* just change the tempo component, without moving */
+	TempoPoint& operator=(Tempo const & t) {
+		*((Tempo*)this) = t;
+		return *this;
+	}
+
+	superclock_t superclock_at_qn (Beats const & qn) const;
 
 	double c_per_superclock () const { return _c_per_superclock; }
 	double c_per_quarter () const { return _c_per_quarter; }
@@ -193,18 +322,51 @@ class LIBTEMPORAL_API TempoMetric : public Tempo, public Meter {
 	void compute_c_superclock (samplecnt_t sr, superclock_t end_superclocks_per_note_type, superclock_t duration);
 	void compute_c_quarters (samplecnt_t sr, superclock_t end_superclocks_per_note_type, Beats const & duration);
 
-	superclock_t superclocks_per_bar (samplecnt_t sr) const;
-	superclock_t superclocks_per_grid (samplecnt_t sr) const;
-
-	superclock_t superclock_at_qn (Beats const & qn) const;
-	superclock_t superclock_per_note_type_at_superclock (superclock_t) const;
-
-	/* technically this is returning samplecnt_t but that's not available here */
-	superclock_t samples_per_bar (samplecnt_t sr) const;
+	XMLNode& get_state () const;
 
   private:
 	double _c_per_quarter;
 	double _c_per_superclock;
+};
+
+/** Helper class to perform computations that require both Tempo and Meter
+    at a given point in time.
+*/
+class LIBTEMPORAL_API TempoMetric : public TempoPoint, public Meter {
+  public:
+	TempoMetric (TempoPoint const & tp, Meter const & m) : TempoPoint (tp), Meter (m) {}
+	TempoMetric (Tempo const & t, Meter const & m, Point const & p) : TempoPoint (t, p), Meter (m) {}
+	~TempoMetric () {}
+
+	superclock_t superclocks_per_bar (samplecnt_t sr) const {
+		return superclocks_per_grid (sr) * _divisions_per_bar;
+	}
+	superclock_t superclocks_per_grid (samplecnt_t sr) const {
+		return (superclock_ticks_per_second * Meter::note_value()) / (note_types_per_minute() / Tempo::note_type());
+	}
+
+	superclock_t superclock_per_note_type_at_superclock (superclock_t sc) const {
+		return superclocks_per_note_type () * expm1 (c_per_superclock() * sc);
+	}
+
+	/* technically this is returning samplecnt_t but that type is not available here */
+	superclock_t samples_per_bar (samplecnt_t sr) const {
+		return superclock_to_samples (superclocks_per_bar (sr), sr);
+	}
+};
+
+/* A music time point is a place where BBT time (BarTime) is reset from
+ * whatever it would be when just inferring from the usual counting. Its
+ * position is given by a Point that might use superclock or Beats, and the
+ * Point's BBT time member is overwritten.
+ */
+class LIBTEMPORAL_API MusicTimePoint : public Point
+{
+  public:
+	MusicTimePoint (BBT_Time const & bbt_time, Point const & p) : Point (p) { _bbt = bbt_time; }
+	MusicTimePoint (XMLNode const &);
+
+	XMLNode & get_state () const;
 };
 
 /** Tempo Map - mapping of timecode to musical time.
@@ -256,7 +418,7 @@ class LIBTEMPORAL_API TempoMetric : public Tempo, public Meter {
 
  */
 
-class LIBTEMPORAL_API TempoMapPoint
+class LIBTEMPORAL_API TempoMapPoint : public Point
 {
   public:
 	enum Flag {
@@ -265,24 +427,19 @@ class LIBTEMPORAL_API TempoMapPoint
 		ExplicitPosition = 0x4,
 	};
 
-	TempoMapPoint (XMLNode const &, TempoMap*);
-	TempoMapPoint (TempoMap* map, Flag f, Tempo const& t, Meter const& m, superclock_t sc, Beats const & q, BBT_Time const & bbt, bool ramp = false)
-		: _flags (f), _explicit (t, m, ramp), _sclock (sc), _quarters (q), _bbt (bbt), _dirty (true), _floating (false), _map (map) {}
-	TempoMapPoint (TempoMapPoint const & tmp, superclock_t sc, Beats const & q, BBT_Time const & bbt)
-		: _flags (Flag (0)), _reference (&tmp), _sclock (sc), _quarters (q), _bbt (bbt), _dirty (true), _floating (false), _map (tmp.map()) {}
+	TempoMapPoint (TempoMap* map, Flag f, TempoPoint& t, MeterPoint& m, superclock_t sc, Beats const & q, BBT_Time const & bbt)
+		: Point (sc, q, bbt), _flags (f), _map (map), _tempo (&t), _meter (&m), _floating (false) {}
 	~TempoMapPoint () {}
 
-	TempoMap* map() const { return _map; }
-	void set_map (TempoMap* m);
-
+	TempoMap*    map()  const  { return _map; }
+	Flag         flags() const { return _flags; }
+	TempoPoint & tempo() const { return *_tempo; }
+	MeterPoint & meter() const { return *_meter; }
 
 	/* called by a GUI that is manipulating the position of this point */
 	void start_float ();
 	void end_float ();
 	bool floating() const { return _floating; }
-
-	Flag flags() const             { return _flags; }
-	void set_flags (Flag f);
 
 	bool is_explicit_tempo ()    const { return _flags & ExplicitTempo; }
 	bool is_explicit_meter ()    const { return _flags & ExplicitMeter; }
@@ -290,31 +447,13 @@ class LIBTEMPORAL_API TempoMapPoint
 	bool is_explicit() const           { return _flags & (ExplicitMeter|ExplicitTempo|ExplicitPosition); }
 	bool is_implicit() const           { return _flags == Flag (0); }
 
-	void make_explicit (Flag f) {
-		if (!(_flags & f)) {
-			_flags = Flag (_flags|f);
-			/* since _metric and _reference are part of an anonymous union,
-			   avoid possible compiler glitches by copying to a stack
-			   variable first, then assign.
-			*/
-			TempoMetric tm (metric());
-			_explicit = tm;
-			_dirty = true;
-		}
-	}
-
 	superclock_t superclocks_per_note_type (int8_t note_type) const {
-		if (is_explicit()) {
-			return _explicit.superclocks_per_note_type (note_type);
-		}
-		return _reference->superclocks_per_note_type (note_type);
+		return _tempo->superclocks_per_note_type (note_type);
 	}
 
 	struct BadTempoMetricLookup : public std::exception {
 		virtual const char* what() const throw() { return "cannot obtain non-const Metric from implicit map point"; }
 	};
-
-	bool                dirty()  const { return _dirty; }
 
 	superclock_t        sclock() const      { return _sclock; }
 	timepos_t           time() const;
@@ -322,43 +461,30 @@ class LIBTEMPORAL_API TempoMapPoint
 	Beats const &       quarters() const  { return _quarters; }
 	BBT_Time  const &   bbt() const       { return _bbt; }
 
-	superclock_t        meter_sclock() const   { if (is_explicit_meter()) return sclock(); return _reference->sclock(); }
-	samplepos_t         meter_sample() const   { if (is_explicit_meter()) return sample(); return _reference->sample(); }
-	Beats const &       meter_quarters() const { if (is_explicit_meter()) return quarters(); return _reference->quarters(); }
-	BBT_Time  const &   meter_bbt() const      { if (is_explicit_meter()) return bbt(); return _reference->bbt(); }
+	superclock_t        meter_sclock() const   { return _meter->sclock(); }
+	samplepos_t         meter_sample() const;
+	Beats const &       meter_quarters() const { return _meter->beats(); }
+	BBT_Time const &    meter_bbt() const      { return _meter->bbt(); }
 
-	superclock_t        tempo_sclock() const   { if (is_explicit_tempo()) return sclock(); return _reference->sclock(); }
-	samplepos_t         tempo_sample() const   { if (is_explicit_tempo()) return sample(); return _reference->sample(); }
-	Beats const &       tempo_quarters() const { if (is_explicit_tempo()) return quarters(); return _reference->quarters(); }
-	BBT_Time  const &   tempo_bbt() const      { if (is_explicit_tempo()) return bbt(); return _reference->bbt(); }
+	superclock_t        tempo_sclock() const   { return _tempo->sclock(); }
+	samplepos_t         tempo_sample() const;
+	Beats const &       tempo_quarters() const { return _tempo->beats(); }
+	BBT_Time const &    tempo_bbt() const      { return _tempo->bbt(); }
 
-	bool                ramped() const      { return metric().ramped(); }
-
-	TempoMetric const & metric() const { return is_explicit() ? _explicit : _reference->metric(); }
-	Tempo               tempo() const  { return metric(); }
-	Tempo               meter() const  { return metric(); }
-
-	void compute_c_superclock (samplecnt_t sr, superclock_t end_superclocks_per_note_type, superclock_t duration) { if (is_explicit()) { _explicit.compute_c_superclock (sr, end_superclocks_per_note_type, duration); } }
-	void compute_c_quarters (samplecnt_t sr, superclock_t end_superclocks_per_note_type, Beats const & duration) { if (is_explicit()) { _explicit.compute_c_quarters (sr, end_superclocks_per_note_type, duration); } }
 
 	/* None of these properties can be set for an Implicit point, because
-	 * they are determined by the TempoMapPoint pointed to by _reference.
+	 * they are determined by prior Explicit points.
 	 */
 
-	void set_sclock (superclock_t  sc) { if (is_explicit()) { _sclock = sc; _dirty = true; } }
-	void set_quarters (Beats const & q) { if (is_explicit()) { _quarters = q; _dirty = true;  } }
-	void set_bbt (BBT_Time const & bbt) {  if (is_explicit()) { _bbt = bbt; _dirty = true;  } }
-	void set_dirty (bool yn);
-	void make_implicit (TempoMapPoint & tmp) { _flags = Flag (0); _reference = &tmp; }
+	void set_sclock (superclock_t  sc) { if (is_explicit()) { Point::set_sclock (sc); } }
+	void set_quarters (Beats const & q) { if (is_explicit()) { Point::set_beats (q); } }
+	void set_bbt (BBT_Time const & bbt) {  if (is_explicit()) { Point::set_bbt (bbt); } }
 
 	Beats quarters_at (superclock_t sc) const;
 	Beats quarters_at (BBT_Time const &) const;
 
 	BBT_Time bbt_at (Beats const &) const;
 	BBT_Time bbt_at (superclock_t) const;
-
-	XMLNode& get_state() const;
-	int set_state (XMLNode const&, int version);
 
 	struct SuperClockComparator {
 		bool operator() (TempoMapPoint const & a, TempoMapPoint const & b) const { return a.sclock() < b.sclock(); }
@@ -375,24 +501,21 @@ class LIBTEMPORAL_API TempoMapPoint
 	superclock_t  walk_to_superclock (superclock_t start, Beats const & distance) const;
 	Beats walk_to_quarters (superclock_t start, superclock_t distance) const;
 
-	TempoMetric & nonconst_metric() const { return is_explicit() ? *(const_cast<TempoMetric*>(&_explicit)) : *(const_cast<TempoMetric*>(&_reference->metric())); }
+	TempoPoint & nonconst_tempo() const { return *_tempo; }
+	MeterPoint & nonconst_meter() const { return *_meter; }
+
+	TempoMetric metric() const { return TempoMetric (tempo(), meter()); }
 
   protected:
 	friend class TempoMap;
 	void map_reset_set_sclock_for_sr_change (superclock_t sc) { _sclock = sc; }
 
   private:
-	Flag                  _flags;
-	union {
-		TempoMapPoint const * _reference;
-		TempoMetric           _explicit;
-	};
-	superclock_t          _sclock;
-	Beats                 _quarters;
-	BBT_Time              _bbt;
-	bool                  _dirty;
-	bool                  _floating;
-	TempoMap*             _map;
+	Flag         _flags;
+	TempoMap*    _map;
+	TempoPoint * _tempo;
+	MeterPoint * _meter;
+	bool         _floating;
 };
 
 typedef std::list<TempoMapPoint> TempoMapPoints;
@@ -411,30 +534,25 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	void insert_time (timepos_t const & pos, timecnt_t const & duration);
 	bool remove_time (timepos_t const & pos, timecnt_t const & duration);
 
-	bool set_tempo_and_meter (Tempo const &, Meter const &, samplepos_t, bool ramp, bool flexible);
+	void change_tempo (TempoPoint&, Tempo const &);
 
-	void change_tempo (TempoMapPoint&, Tempo const &);
+	/* no bar time variant for this */
+	TempoMapPoint const & set_tempo (Tempo const &, superclock_t);
+	TempoMapPoint const & set_tempo (Tempo const &, BBT_Time const &);
+	TempoMapPoint const & set_tempo (Tempo const &, timepos_t const &);
 
-	/* these will return null if the tempo could not be set at the * requested time
-	 */
-	TempoMapPoint* set_tempo (Tempo const &, BBT_Time const &, bool ramp = false);
-	TempoMapPoint* set_tempo (Tempo const &, samplepos_t, bool ramp = false);
-	TempoMapPoint* set_tempo (Tempo const &, Beats const &, bool ramp = false);
-	TempoMapPoint* set_tempo (Tempo const &, timepos_t const &, bool ramp = false);
+	void remove_tempo (TempoPoint const &);
 
-	void remove_tempo_at (TempoMapPoint const &);
+	/* no beat time variant for this */
+	TempoMapPoint const & set_meter (Meter const &, BBT_Time const &);
+	TempoMapPoint const & set_meter (Meter const &, superclock_t);
+	TempoMapPoint const & set_meter (Meter const &, timepos_t const &);
 
-	bool set_meter (Meter const &, BBT_Time const &);
-	bool set_meter (Meter const &, samplepos_t);
-	bool set_meter (Meter const &, timepos_t const &);
-
-	void remove_meter_at (TempoMapPoint const &);
-
-	void remove_explicit_point (samplepos_t);
+	void remove_meter (MeterPoint const &);
 
 	/* these are a convenience method that just wrap some odd semantics */
-	bool move_to (timepos_t const & current, timepos_t const & destination, bool push = false);
-	bool move_to (TempoMapPoint & point, timepos_t const & destination, bool push = false);
+	bool move_tempo (TempoPoint const & point, timepos_t const & destination, bool push = false);
+	bool move_meter (MeterPoint const & point, timepos_t const & destination, bool push = false);
 
 	bool can_remove (Tempo const &) const;
 	bool can_remove (Meter const &) const;
@@ -458,9 +576,9 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	Tempo const & tempo_at (BBT_Time const & bbt) const;
 	Tempo const & tempo_at (timepos_t const & t) const;
 
-	TempoMetric const & metric_at (samplepos_t sc) const { return  const_point_at (sc).metric(); }
-	TempoMetric const & metric_at (Beats const &b) const { return const_point_at (b).metric(); }
-	TempoMetric const & metric_at (BBT_Time const & bbt) const {return const_point_at (bbt).metric(); }
+	TempoMetric metric_at (samplepos_t sc) const { return  const_point_at (sc).metric(); }
+	TempoMetric metric_at (Beats const &b) const { return const_point_at (b).metric(); }
+	TempoMetric metric_at (BBT_Time const & bbt) const {return const_point_at (bbt).metric(); }
 
 	TempoMapPoint const * previous_tempo (TempoMapPoint const &) const;
 
@@ -546,8 +664,9 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	};
 
 	void dump (std::ostream&);
+	void dump_fundamental (std::ostream&) const;
 	void extend (superclock_t limit);
-	void rebuild (superclock_t limit);
+	void rebuild (superclock_t limit = 0);
 	void full_rebuild ();
 
 	PBD::Signal2<void,samplepos_t,samplepos_t> Changed;
@@ -555,7 +674,15 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	XMLNode& get_state();
 	int set_state (XMLNode const&, int version);
 
+	typedef std::list<TempoPoint> Tempos;
+	typedef std::list<MeterPoint> Meters;
+	typedef std::list<MusicTimePoint> MusicTimes;
+
    private:
+	Tempos       _tempos;
+	Meters       _meters;
+	MusicTimes   _bartimes;
+
 	TempoMapPoints                _points;
 	samplecnt_t                   _sample_rate;
 	mutable Glib::Threads::RWLock _lock;
@@ -597,24 +724,29 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	TempoMapPoint & point_at (Beats const & b) { return *iterator_at (b); }
 	TempoMapPoint & point_at (BBT_Time const & bbt) { return *iterator_at (bbt); }
 
-	Meter const & meter_at_locked (superclock_t sc) const { return const_point_at (sc).metric(); }
-	Meter const & meter_at_locked (Beats const & b) const { return const_point_at (b).metric(); }
-	Meter const & meter_at_locked (BBT_Time const & bbt) const { return const_point_at (bbt).metric(); }
-	Tempo const & tempo_at_locked (superclock_t sc) const { return const_point_at (sc).metric(); }
-	Tempo const & tempo_at_locked (Beats const &b) const { return const_point_at (b).metric(); }
-	Tempo const & tempo_at_locked (BBT_Time const & bbt) const { return const_point_at (bbt).metric(); }
+	Meter const & meter_at_locked (superclock_t sc) const { return const_point_at (sc).meter(); }
+	Meter const & meter_at_locked (Beats const & b) const { return const_point_at (b).meter(); }
+	Meter const & meter_at_locked (BBT_Time const & bbt) const { return const_point_at (bbt).meter(); }
+	Tempo const & tempo_at_locked (superclock_t sc) const { return const_point_at (sc).tempo(); }
+	Tempo const & tempo_at_locked (Beats const &b) const { return const_point_at (b).tempo(); }
+	Tempo const & tempo_at_locked (BBT_Time const & bbt) const { return const_point_at (bbt).tempo(); }
+
 	BBT_Time      bbt_at_locked (superclock_t sc) const;
 	BBT_Time      bbt_at_locked (Beats const &) const;
 	samplepos_t   sample_at_locked (Beats const &) const;
 	samplepos_t   sample_at_locked (BBT_Time const &) const;
 
-	int set_points_from_state (XMLNode const &);
+	int set_tempos_from_state (XMLNode const &);
+	int set_meters_from_state (XMLNode const &);
+	int set_music_times_from_state (XMLNode const &);
 
 	void maybe_rebuild();
 	void rebuild_locked (superclock_t limit);
 	void dump_locked (std::ostream&);
 
-	bool move_to (TempoMapPoints::iterator & current, timepos_t const & destination, bool push);
+	TempoPoint* add_tempo (TempoPoint const &);
+	MeterPoint* add_meter (MeterPoint const &);
+	MusicTimePoint* add_music_time_point (MusicTimePoint const &);
 };
 
 } /* end of namespace Temporal */
@@ -630,9 +762,12 @@ DEFINE_ENUM_CONVERT(Temporal::TimeDomain);
 
 
 namespace std {
-std::ostream& operator<<(std::ostream& str, Temporal::TempoMapPoint const &b);
-std::ostream& operator<<(std::ostream& str, Temporal::Tempo const & t);
-std::ostream& operator<<(std::ostream& str, Temporal::Meter const & m);
+std::ostream& operator<<(std::ostream& str, Temporal::TempoMapPoint const &);
+std::ostream& operator<<(std::ostream& str, Temporal::Tempo const &);
+std::ostream& operator<<(std::ostream& str, Temporal::Meter const &);
+std::ostream& operator<<(std::ostream& str, Temporal::Point const &);
+std::ostream& operator<<(std::ostream& str, Temporal::TempoPoint const &);
+std::ostream& operator<<(std::ostream& str, Temporal::MeterPoint const &);
 }
 
 #endif /* __temporal_tempo_h__ */

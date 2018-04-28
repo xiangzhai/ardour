@@ -293,15 +293,15 @@ Editor::import_smf_tempo_map (Evoral::SMF const & smf, timepos_t const & pos)
 
 		if (have_initial_meter) {
 			Temporal::Beats beats ((t->time_pulses / smf.ppqn()) / 4.0);
-			new_map.set_tempo (tempo, new_map.sample_at (beats), false);
+
+			new_map.set_tempo (tempo, timepos_t (new_map.sample_at (beats)));
 			if (!(meter == last_meter)) {
-				bbt = new_map.bbt_at (beats);
-				new_map.set_meter (meter, bbt);
+				new_map.set_meter (meter, beats);
 			}
 
 		} else {
 			new_map.set_tempo (tempo, 0);
-			new_map.set_meter ( meter, Temporal::BBT_Time());
+			new_map.set_meter (meter, Beats());
 			have_initial_meter = true;
 
 		}

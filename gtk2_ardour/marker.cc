@@ -559,10 +559,10 @@ TempoMapMarker::~TempoMapMarker ()
 {
 }
 
-Temporal::TempoMetric &
+Temporal::TempoMetric
 TempoMapMarker::metric() const
 {
-	return point().nonconst_metric();
+	return _point->metric();
 }
 
 /***********************************************************************/
@@ -574,10 +574,10 @@ TempoMarker::TempoMarker (PublicEditor& editor, ArdourCanvas::Container& parent,
 	group->Event.connect (sigc::bind (sigc::mem_fun (editor, &PublicEditor::canvas_tempo_marker_event), group, this));
 }
 
-Temporal::Tempo &
+Temporal::TempoPoint &
 TempoMarker::tempo () const
 {
-	return metric();
+	return point().tempo();
 }
 
 void
@@ -609,8 +609,8 @@ MeterMarker::MeterMarker (PublicEditor& editor, ArdourCanvas::Container & parent
 	group->Event.connect (sigc::bind (sigc::mem_fun (editor, &PublicEditor::canvas_meter_marker_event), group, this));
 }
 
-Temporal::Meter&
+Temporal::MeterPoint &
 MeterMarker::meter () const
 {
-	return metric();
+	return point().meter();
 }
