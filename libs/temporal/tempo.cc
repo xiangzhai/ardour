@@ -959,57 +959,73 @@ TempoMap::change_tempo (TempoPoint & p, Tempo const & t)
 TempoMapPoint const &
 TempoMap::set_tempo (Tempo const & t, superclock_t sc)
 {
-	TraceableWriterLock lm (_lock);
+	TempoMapPoint const * ret;
 
-	assert (!_points.empty());
+	{
+		TraceableWriterLock lm (_lock);
 
-	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("Set tempo @ %1 to %2\n", sc, t));
+		assert (!_points.empty());
 
-	Beats beats;
-	BBT_Time bbt;
+		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("Set tempo @ %1 to %2\n", sc, t));
 
-	TempoMapPoint const &point (const_point_at (sc));
+		Beats beats;
+		BBT_Time bbt;
 
-	/* tempo changes must be on beat */
+		TempoMapPoint const &point (const_point_at (sc));
 
-	beats = point.quarters_at (sc).round_to_beat ();
-	bbt = point.bbt_at (beats);
+		/* tempo changes must be on beat */
 
-	/* recompute superclock position of rounded beat */
-	sc = point.tempo().superclock_at_qn (beats);
+		beats = point.quarters_at (sc).round_to_beat ();
+		bbt = point.bbt_at (beats);
 
-	TempoPoint tp (t, sc, beats, bbt);
-	add_tempo (tp);
+		/* recompute superclock position of rounded beat */
+		sc = point.tempo().superclock_at_qn (beats);
 
-	rebuild ();
+		TempoPoint tp (t, sc, beats, bbt);
+		add_tempo (tp);
 
-	return const_point_at (tp.sclock());
+		rebuild ();
+
+		ret = &const_point_at (tp.sclock());
+	}
+
+	Changed (0, _points.back().sample());
+
+	return *ret;
 }
 
 TempoMapPoint const &
 TempoMap::set_tempo (Tempo const & t, BBT_Time const & bbt)
 {
-	TraceableWriterLock lm (_lock);
+	TempoMapPoint const * ret;
 
-	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("Set tempo @ %1 to %2\n", bbt, t));
+	{
+		TraceableWriterLock lm (_lock);
 
-	/* tempo changes are required to be on-beat */
+		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("Set tempo @ %1 to %2\n", bbt, t));
 
-	BBT_Time on_beat = bbt.round_to_beat();
-	superclock_t sc;
-	Beats beats;
+		/* tempo changes are required to be on-beat */
 
-	TempoMapPoint const &point (const_point_at (on_beat));
+		BBT_Time on_beat = bbt.round_to_beat();
+		superclock_t sc;
+		Beats beats;
 
-	beats = point.quarters_at (on_beat);
-	sc = point.tempo().superclock_at_qn (beats);
+		TempoMapPoint const &point (const_point_at (on_beat));
 
-	TempoPoint tp (t, sc, beats, on_beat);
-	(void) add_tempo (tp);
+		beats = point.quarters_at (on_beat);
+		sc = point.tempo().superclock_at_qn (beats);
 
-	rebuild ();
+		TempoPoint tp (t, sc, beats, on_beat);
+		(void) add_tempo (tp);
 
-	return const_point_at (tp.sclock());
+		rebuild ();
+
+		ret = &const_point_at (tp.sclock());
+	}
+
+	Changed (0, _points.back().sample());
+
+	return *ret;
 }
 
 TempoMapPoint const &
@@ -1069,126 +1085,134 @@ TempoMap::add_tempo (TempoPoint const & tp)
 void
 TempoMap::remove_tempo (TempoPoint const & tp)
 {
-	TraceableWriterLock lm (_lock);
+	{
+		TraceableWriterLock lm (_lock);
 
-	Tempos::iterator t = upper_bound (_tempos.begin(), _tempos.end(), tp, Point::sclock_comparator());
-	if (t->sclock() != tp.sclock()) {
-		/* error ... no tempo point at the time of tp */
-		return;
+		Tempos::iterator t = upper_bound (_tempos.begin(), _tempos.end(), tp, Point::sclock_comparator());
+		if (t->sclock() != tp.sclock()) {
+			/* error ... no tempo point at the time of tp */
+			return;
+		}
+		_tempos.erase (t);
+		set_dirty (true);
 	}
-	_tempos.erase (t);
-	set_dirty (true);
+
+	Changed (0, _points.back().sample());
 }
 
 bool
 TempoMap::move_tempo (TempoPoint const & tp, timepos_t const & when, bool push)
 {
-	Tempos::iterator t;
-	Tempos::iterator next;
-	Tempos::iterator prev;
-	superclock_t sc;
-	bool moved = false;
-	Beats beats;
+	{
+		TraceableWriterLock lm (_lock);
 
-	assert (when.lock_style() == time_domain());
+		Tempos::iterator t;
+		Tempos::iterator next;
+		Tempos::iterator prev;
+		superclock_t sc;
+		bool moved = false;
+		Beats beats;
 
-	switch (time_domain()) {
-	case AudioTime:
+		assert (when.lock_style() == time_domain());
 
-		/* find iterator for existing tempo point */
+		switch (time_domain()) {
+		case AudioTime:
 
-		sc = S2Sc (when.sample());
+			/* find iterator for existing tempo point */
 
-		/* only the superclock time matters for the comparator */
-		t = upper_bound (_tempos.begin(), _tempos.end(), TempoPoint (tp, sc, Beats(), BBT_Time()), Point::sclock_comparator());
+			sc = S2Sc (when.sample());
 
-		/* if insert position is end, or the found tempo is at a
-		   different time than the passed in TempoPoint, do nothing
-		*/
-		if (t == _tempos.end() || (t->sclock() != tp.sclock())) {
-			/* no tempo at this time */
-			return false;
-		}
+			/* only the superclock time matters for the comparator */
+			t = upper_bound (_tempos.begin(), _tempos.end(), TempoPoint (tp, sc, Beats(), BBT_Time()), Point::sclock_comparator());
 
-		next = t; ++next;
-
-		if (t == _tempos.begin()) {
-			if (sc < next->sclock()) {
-				/* no earlier position, and we can just slide
-				 * it to the new position, since it remains
-				 * ordered before the following TempoPoint.
-				 */
-				t->set_sclock (sc);
-				moved = true;
+			/* if insert position is end, or the found tempo is at a
+			   different time than the passed in TempoPoint, do nothing
+			*/
+			if (t == _tempos.end() || (t->sclock() != tp.sclock())) {
+				/* no tempo at this time */
+				return false;
 			}
-		} else {
-			prev = t; --prev;
-			if (prev->sclock() < sc && sc < next->sclock()) {
-				/* we can just slide it along, since it
-				 * remains positioned between the adjacent
-				 * TempoPoints
-				 */
-				t->set_sclock (sc);
-				moved = true;
+
+			next = t; ++next;
+
+			if (t == _tempos.begin()) {
+				if (sc < next->sclock()) {
+					/* no earlier position, and we can just slide
+					 * it to the new position, since it remains
+					 * ordered before the following TempoPoint.
+					 */
+					t->set_sclock (sc);
+					moved = true;
+				}
+			} else {
+				prev = t; --prev;
+				if (prev->sclock() < sc && sc < next->sclock()) {
+					/* we can just slide it along, since it
+					 * remains positioned between the adjacent
+					 * TempoPoints
+					 */
+					t->set_sclock (sc);
+					moved = true;
+				}
 			}
-		}
-		if (!moved) {
-			_tempos.erase (t);
-			set_dirty (true);
-			set_tempo (tp, sc);
-		}
-		break;
-
-	case BeatTime:
-		/* find existing tempo point */
-
-		beats = when.beats ();
-
-		/* only the beat time matters for the comparator */
-		t = upper_bound (_tempos.begin(), _tempos.end(), TempoPoint (tp, 0, beats, BBT_Time()), Point::beat_comparator());
-
-		/* if insert position is end, or the found tempo is at a
-		   different time than the passed in TempoPoint, do nothing
-		*/
-		if (t == _tempos.end() || (t->beats() != tp.beats())) {
-			/* no tempo at this time */
-			return false;
-		}
-
-		next = t; ++next;
-
-		if (t == _tempos.begin()) {
-			if (beats < next->beats()) {
-				/* no earlier position, and we can just slide
-				 * it to the new position, since it remains
-				 * ordered before the following TempoPoint.
-				 */
-				t->set_beats (beats);
-				moved = true;
+			if (!moved) {
+				_tempos.erase (t);
+				set_dirty (true);
+				set_tempo (tp, sc);
 			}
-		} else {
-			prev = t; --prev;
-			if (prev->beats() < beats && beats < next->beats()) {
-				/* we can just slide it along, since it
-				 * remains positioned between the adjacent
-				 * TempoPoints
-				 */
-				t->set_beats (beats);
-				moved = true;
-			}
-		}
-		if (!moved) {
-			_tempos.erase (t);
-			set_dirty (true);
-			set_tempo (tp, beats);
-		}
-		break;
+			break;
 
-	case BarTime:
-		break;
+		case BeatTime:
+			/* find existing tempo point */
+
+			beats = when.beats ();
+
+			/* only the beat time matters for the comparator */
+			t = upper_bound (_tempos.begin(), _tempos.end(), TempoPoint (tp, 0, beats, BBT_Time()), Point::beat_comparator());
+
+			/* if insert position is end, or the found tempo is at a
+			   different time than the passed in TempoPoint, do nothing
+			*/
+			if (t == _tempos.end() || (t->beats() != tp.beats())) {
+				/* no tempo at this time */
+				return false;
+			}
+
+			next = t; ++next;
+
+			if (t == _tempos.begin()) {
+				if (beats < next->beats()) {
+					/* no earlier position, and we can just slide
+					 * it to the new position, since it remains
+					 * ordered before the following TempoPoint.
+					 */
+					t->set_beats (beats);
+					moved = true;
+				}
+			} else {
+				prev = t; --prev;
+				if (prev->beats() < beats && beats < next->beats()) {
+					/* we can just slide it along, since it
+					 * remains positioned between the adjacent
+					 * TempoPoints
+					 */
+					t->set_beats (beats);
+					moved = true;
+				}
+			}
+			if (!moved) {
+				_tempos.erase (t);
+				set_dirty (true);
+				set_tempo (tp, beats);
+			}
+			break;
+
+		case BarTime:
+			break;
+		}
 	}
 
-	set_dirty (true);
+	Changed (0, _points.back().sample());
 
 	return true;
 }
@@ -2219,91 +2243,101 @@ TempoMap::n_tempos () const
 void
 TempoMap::insert_time (timepos_t const & pos, timecnt_t const & duration)
 {
-	TraceableWriterLock lm (_lock);
-	TempoMapPoints::iterator i;
+	{
+		TraceableWriterLock lm (_lock);
+		TempoMapPoints::iterator i;
 
-	switch (duration.style()) {
-	case AudioTime:
-		i = iterator_at (S2Sc (pos.sample()));
-		if (i->sample() < pos.sample()) {
-			++i;
-		}
+		switch (duration.style()) {
+		case AudioTime:
+			i = iterator_at (S2Sc (pos.sample()));
+			if (i->sample() < pos.sample()) {
+				++i;
+			}
 
-		while (i != _points.end()) {
-			i->set_sclock (S2Sc (i->sample() + duration.samples()));
-			++i;
-		}
-		break;
-	case BeatTime:
-		i = iterator_at (pos.beats());
-		if (i->quarters() < pos.beats()) {
-			++i;
-		}
+			while (i != _points.end()) {
+				i->set_sclock (S2Sc (i->sample() + duration.samples()));
+				++i;
+			}
+			break;
+		case BeatTime:
+			i = iterator_at (pos.beats());
+			if (i->quarters() < pos.beats()) {
+				++i;
+			}
 
-		while (i != _points.end()) {
-			i->set_quarters (i->quarters() + duration.beats());
-			++i;
-		}
-		break;
-	case BarTime:
-		i = iterator_at (pos.bbt());
-		if (i->bbt() < pos.bbt()) {
-			++i;
-		}
+			while (i != _points.end()) {
+				i->set_quarters (i->quarters() + duration.beats());
+				++i;
+			}
+			break;
+		case BarTime:
+			i = iterator_at (pos.bbt());
+			if (i->bbt() < pos.bbt()) {
+				++i;
+			}
 
-		while (i != _points.end()) {
-			i->set_bbt (bbt_walk (i->bbt(), duration.bbt()));
-			++i;
+			while (i != _points.end()) {
+				i->set_bbt (bbt_walk (i->bbt(), duration.bbt()));
+				++i;
+			}
+			break;
 		}
-		break;
 	}
+
+	Changed (0, _points.back().sample());
 }
 
 bool
 TempoMap::remove_time (timepos_t const & pos, timecnt_t const & duration)
 {
-	TraceableWriterLock lm (_lock);
-	TempoMapPoints::iterator i;
-
 	bool moved = false;
 
-	switch (duration.style()) {
-	case AudioTime:
-		i = iterator_at (S2Sc (pos.sample()));
-		if (i->sample() < pos.sample()) {
-			++i;
-		}
+	{
+		TraceableWriterLock lm (_lock);
+		TempoMapPoints::iterator i;
 
-		while (i != _points.end()) {
-			i->set_sclock (S2Sc (i->sample() - duration.samples()));
-			++i;
-			moved = true;
-		}
-		break;
-	case BeatTime:
-		i = iterator_at (pos.beats());
-		if (i->quarters() < pos.beats()) {
-			++i;
-		}
+		switch (duration.style()) {
+		case AudioTime:
+			i = iterator_at (S2Sc (pos.sample()));
+			if (i->sample() < pos.sample()) {
+				++i;
+			}
 
-		while (i != _points.end()) {
-			i->set_quarters (i->quarters() - duration.beats());
-			++i;
-			moved = true;
-		}
-		break;
-	case BarTime:
-		i = iterator_at (pos.bbt());
-		if (i->bbt() < pos.bbt()) {
-			++i;
-		}
+			while (i != _points.end()) {
+				i->set_sclock (S2Sc (i->sample() - duration.samples()));
+				++i;
+				moved = true;
+			}
+			break;
+		case BeatTime:
+			i = iterator_at (pos.beats());
+			if (i->quarters() < pos.beats()) {
+				++i;
+			}
 
-		while (i != _points.end()) {
-			i->set_bbt (bbt_walk (i->bbt(), -duration.bbt()));
-			++i;
-			moved = true;
+			while (i != _points.end()) {
+				i->set_quarters (i->quarters() - duration.beats());
+				++i;
+				moved = true;
+			}
+			break;
+		case BarTime:
+			i = iterator_at (pos.bbt());
+			if (i->bbt() < pos.bbt()) {
+				++i;
+			}
+
+			while (i != _points.end()) {
+				i->set_bbt (bbt_walk (i->bbt(), -duration.bbt()));
+				++i;
+				moved = true;
+			}
+			break;
 		}
-		break;
+	}
+
+	if (moved) {
+		Changed (0, _points.back().sample());
 	}
 
 	return moved;
