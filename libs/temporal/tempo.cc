@@ -571,15 +571,7 @@ void
 TempoMap::set_dirty (bool yn)
 {
 	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("tempo map @ %1 dirty set to %2\n", this, yn));
-	const bool emit = (!_dirty && yn);
-
 	_dirty = yn;
-
-	if (emit) {
-		dump_fundamental (cerr);
-		cerr << "\n\n\n\n ______ CHANGED ______\n";
-		Changed (0, _points.back().sclock()); /* EMIT SIGNAL */
-	}
 }
 
 void
