@@ -556,9 +556,6 @@ TempoMap::TempoMap (Tempo const & initial_tempo, Meter const & initial_meter, sa
 	_points.push_back (TempoMapPoint (this, TempoMapPoint::Flag (TempoMapPoint::ExplicitMeter|TempoMapPoint::ExplicitTempo), _tempos.front(), _meters.front(), 0, Beats(), BBT_Time()));
 
 	set_dirty (true);
-
-	cerr << "Initial...\n";
-	dump_locked (cerr);
 }
 
 TempoMap::~TempoMap()
@@ -860,7 +857,6 @@ TempoMap::rebuild (superclock_t limit)
 	}
 
 	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("rebuild: completed, %1 points\n", _points.size()));
-	dump_locked (cerr);
 
 	_generation++;
 	set_dirty (false);
@@ -879,6 +875,11 @@ TempoMap::extend (superclock_t limit)
 {
 	TraceableWriterLock lm (_lock);
 
+	if (_points.back().sclock() >= limit) {
+		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("extension skipped, map already extends to %1 beyond %2\n", _points.back().sclock(), limit));
+		return;
+	}
+
 	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("extend map to %1 from %2 with %3\n", limit, _points.back().sclock(), _points.size()));
 
 	TempoMapPoint const & last_point (_points.back());
@@ -893,6 +894,7 @@ TempoMap::extend (superclock_t limit)
 	BBT_Time bbt (last_point.bbt());
 
 	while (1) {
+
 		qn += qn_step;
 		sc += superclock_step;
 
@@ -905,7 +907,7 @@ TempoMap::extend (superclock_t limit)
 		_points.push_back (TempoMapPoint (this, TempoMapPoint::Flag (0), last_point.tempo(), last_point.meter(), sc, qn, bbt));
 	}
 
-	dump_locked (cerr);
+	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("extension complete, last point at %1 (total points %2)\n", _points.back().sclock(), _points.size()));
 }
 
 MeterPoint*
@@ -1016,6 +1018,40 @@ TempoMap::set_tempo (Tempo const & t, BBT_Time const & bbt)
 		sc = point.tempo().superclock_at_qn (beats);
 
 		TempoPoint tp (t, sc, beats, on_beat);
+		(void) add_tempo (tp);
+
+		rebuild ();
+
+		ret = &const_point_at (tp.sclock());
+	}
+
+	Changed (0, _points.back().sample());
+
+	return *ret;
+}
+
+TempoMapPoint const &
+TempoMap::set_tempo (Tempo const & t, Beats const & beats)
+{
+	TempoMapPoint const * ret;
+
+	{
+		TraceableWriterLock lm (_lock);
+
+		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("Set tempo @ %1 to %2\n", beats, t));
+
+		/* tempo changes are required to be on-beat */
+
+		Beats on_beat = beats.round_to_beat();
+		superclock_t sc;
+		BBT_Time bbt;
+
+		TempoMapPoint const &point (const_point_at (on_beat));
+
+		bbt = point.bbt_at (on_beat);
+		sc = point.tempo().superclock_at_qn (on_beat);
+
+		TempoPoint tp (t, sc, on_beat, bbt);
 		(void) add_tempo (tp);
 
 		rebuild ();
@@ -1222,13 +1258,13 @@ TempoMap::set_meter (Meter const & m, timepos_t const & time)
 {
 	switch (time.lock_style()) {
 	case AudioTime:
-		cerr << "set meter via sample " << time << endl;
 		return set_meter (m, S2Sc (time.sample()));
+	case BarTime:
+		return set_meter (m, time.beats());
 	default:
 		break;
 	}
 
-	cerr << "set meter via BBT " << time.bbt() << endl;
 	return set_meter (m, time.bbt());
 }
 
@@ -1265,6 +1301,40 @@ TempoMap::set_meter (Meter const & t, BBT_Time const & bbt)
 		rebuild ();
 
 		ret = &const_point_at (rounded_bbt);
+	}
+
+	Changed (0, _points.back().sample());
+
+	return *ret;
+}
+
+TempoMapPoint const &
+TempoMap::set_meter (Meter const & t, Beats const & beats)
+{
+	TempoMapPoint const * ret = 0;
+
+	{
+		TraceableWriterLock lm (_lock);
+
+		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("Set meter @ %1 to %2\n", beats, t));
+
+		TempoMapPoint const &point (const_point_at (beats));
+
+		/* meter changes are required to be on-bar */
+
+		BBT_Time rounded_bbt = point.bbt_at (beats);
+		rounded_bbt = point.metric().round_to_bar (rounded_bbt);
+
+		const Beats rounded_beats = point.quarters_at (rounded_bbt);
+		const superclock_t sc = point.tempo().superclock_at_qn (rounded_beats);
+
+		MeterPoint mp (t, sc, rounded_beats, rounded_bbt);
+
+		add_meter (mp);
+
+		rebuild ();
+
+		ret = &const_point_at (rounded_beats);
 	}
 
 	Changed (0, _points.back().sample());

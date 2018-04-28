@@ -536,16 +536,14 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 
 	void change_tempo (TempoPoint&, Tempo const &);
 
-	/* no bar time variant for this */
-	TempoMapPoint const & set_tempo (Tempo const &, superclock_t);
 	TempoMapPoint const & set_tempo (Tempo const &, BBT_Time const &);
+	TempoMapPoint const & set_tempo (Tempo const &, Beats const &);
 	TempoMapPoint const & set_tempo (Tempo const &, timepos_t const &);
 
 	void remove_tempo (TempoPoint const &);
 
-	/* no beat time variant for this */
 	TempoMapPoint const & set_meter (Meter const &, BBT_Time const &);
-	TempoMapPoint const & set_meter (Meter const &, superclock_t);
+	TempoMapPoint const & set_meter (Meter const &, Beats const &);
 	TempoMapPoint const & set_meter (Meter const &, timepos_t const &);
 
 	void remove_meter (MeterPoint const &);
@@ -739,6 +737,9 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	int set_tempos_from_state (XMLNode const &);
 	int set_meters_from_state (XMLNode const &);
 	int set_music_times_from_state (XMLNode const &);
+
+	TempoMapPoint const & set_tempo (Tempo const &, superclock_t);
+	TempoMapPoint const & set_meter (Meter const &, superclock_t);
 
 	void maybe_rebuild();
 	void rebuild_locked (superclock_t limit);
