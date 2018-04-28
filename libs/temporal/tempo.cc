@@ -539,8 +539,8 @@ TempoMapPoint::bbt_at (samplepos_t pos) const
 
 struct TraceableWriterLock : public Glib::Threads::RWLock::WriterLock
 {
-	TraceableWriterLock (Glib::Threads::RWLock & lock) : Glib::Threads::RWLock::WriterLock (lock) { std::cerr << "LOCK " << this << std::endl; PBD::stacktrace (std::cerr, 20); }
-	~TraceableWriterLock() { std::cerr << "UNLOCK " << this << std::endl; }
+	TraceableWriterLock (Glib::Threads::RWLock & lock) : Glib::Threads::RWLock::WriterLock (lock) { }
+	~TraceableWriterLock() { }
 };
 
 TempoMap::TempoMap (Tempo const & initial_tempo, Meter const & initial_meter, samplecnt_t sr)
