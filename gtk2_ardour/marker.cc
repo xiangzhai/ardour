@@ -548,36 +548,28 @@ ArdourMarker::set_right_label_limit (double p)
 
 /***********************************************************************/
 
-TempoMapMarker::TempoMapMarker (PublicEditor& editor, ArdourCanvas::Container& parent, guint32 rgba, const string& text, ArdourMarker::Type type, Temporal::TempoMapPoint & p)
-	: ArdourMarker (editor, parent, rgba, text, type, p.sample(), false)
+TempoMapMarker::TempoMapMarker (PublicEditor& editor, ArdourCanvas::Container& parent, guint32 rgba, const string& text, ArdourMarker::Type type, Temporal::Point & p)
+	: ArdourMarker (editor, parent, rgba, text, type, timepos_t (p.beats()), false)
 	, _point (&p)
 {
-	assert (_point->is_explicit());
 }
 
 TempoMapMarker::~TempoMapMarker ()
 {
 }
 
-Temporal::TempoMetric
-TempoMapMarker::metric() const
-{
-	return _point->metric();
-}
-
 /***********************************************************************/
 
-TempoMarker::TempoMarker (PublicEditor& editor, ArdourCanvas::Container& parent, guint32 rgba, const string& text, Temporal::TempoMapPoint & p)
+TempoMarker::TempoMarker (PublicEditor& editor, ArdourCanvas::Container& parent, guint32 rgba, const string& text, Temporal::TempoPoint & p)
 	: TempoMapMarker (editor, parent, rgba, text, Tempo, p)
 {
-	assert (point().is_explicit_tempo());
 	group->Event.connect (sigc::bind (sigc::mem_fun (editor, &PublicEditor::canvas_tempo_marker_event), group, this));
 }
 
 Temporal::TempoPoint &
 TempoMarker::tempo () const
 {
-	return point().tempo();
+	return *dynamic_cast<Temporal::TempoPoint*> (_point);
 }
 
 void
@@ -602,15 +594,14 @@ TempoMarker::update_height_mark (const double ratio)
 
 /***********************************************************************/
 
-MeterMarker::MeterMarker (PublicEditor& editor, ArdourCanvas::Container & parent, guint32 rgba, const std::string& text, Temporal::TempoMapPoint & p)
+MeterMarker::MeterMarker (PublicEditor& editor, ArdourCanvas::Container & parent, guint32 rgba, const std::string& text, Temporal::MeterPoint & p)
 	: TempoMapMarker (editor, parent, rgba, text, Meter, p)
 {
-	assert (point().is_explicit_meter());
 	group->Event.connect (sigc::bind (sigc::mem_fun (editor, &PublicEditor::canvas_meter_marker_event), group, this));
 }
 
 Temporal::MeterPoint &
 MeterMarker::meter () const
 {
-	return point().meter();
+	return *dynamic_cast<Temporal::MeterPoint*> (_point);
 }

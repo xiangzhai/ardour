@@ -558,8 +558,8 @@ public:
 
 	void mouse_add_new_tempo_event (Temporal::timepos_t const & where);
 	void mouse_add_new_meter_event (Temporal::timepos_t const & where);
-	void edit_tempo_section (Temporal::TempoMapPoint const &);
-	void edit_meter_section (Temporal::TempoMapPoint const &);
+	void edit_tempo_section (Temporal::TempoPoint const &);
+	void edit_meter_section (Temporal::MeterPoint const &);
 
 protected:
 	void map_transport_state ();
@@ -1693,8 +1693,8 @@ private:
 
 	void remove_tempo_marker (ArdourCanvas::Item*);
 	void remove_meter_marker (ArdourCanvas::Item*);
-	gint real_remove_tempo_marker (Temporal::TempoMapPoint const &);
-	gint real_remove_meter_marker (Temporal::TempoMapPoint const &);
+	gint real_remove_tempo_marker (Temporal::TempoPoint const &);
+	gint real_remove_meter_marker (Temporal::MeterPoint const &);
 
 	void edit_tempo_marker (TempoMarker&);
 	void edit_meter_marker (MeterMarker&);

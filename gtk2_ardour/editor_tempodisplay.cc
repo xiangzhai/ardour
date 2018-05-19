@@ -101,17 +101,20 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 
 		Temporal::TempoMetric const & metric (i->metric());
 
-		if (i->flags() & TempoMapPoint::ExplicitMeter) {
+		if (i->is_explicit_meter()) {
 
 			snprintf (buf, sizeof(buf), "%d/%d", metric.divisions_per_bar(), metric.note_value ());
+
+			cerr << "NEW METER MARKER using " << buf << endl;
+
 			if (i->map()->time_domain() != Temporal::AudioTime) {
-				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker music"), buf, *i));
+				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker music"), buf, i->meter()));
 			} else {
-				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker"), buf, *i));
+				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker"), buf, i->meter()));
 			}
 		}
 
-		if (i->flags() & TempoMapPoint::ExplicitTempo) {
+		if (i->is_explicit_tempo()) {
 
 			max_tempo = max (max_tempo, metric.note_types_per_minute());
 			max_tempo = max (max_tempo, metric.end_note_types_per_minute());
@@ -123,9 +126,9 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 
 			const std::string tname (X_(""));
 			if (i->map()->time_domain() != Temporal::AudioTime) {
-				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker music"), tname, *i));
+				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker music"), tname, i->tempo()));
 			} else {
-				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker"), tname, *i));
+				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker"), tname, i->tempo()));
 			}
 
 			if (prev_ts != points.end() && abs (prev_ts->metric().end_note_types_per_minute() - i->metric().note_types_per_minute()) < 1.0) {
@@ -208,38 +211,34 @@ Editor::tempo_map_changed (samplepos_t, samplepos_t)
 	draw_measures (grid);
 	update_tempo_based_rulers ();
 
-	TempoMapPoint const * prev_point = 0;
+	Temporal::TempoPoint const * prev_point = 0;
 	double max_tempo = 0.0;
 	double min_tempo = DBL_MAX;
 
 	for (Marks::iterator x = metric_marks.begin(); x != metric_marks.end(); ++x) {
 		TempoMarker* tempo_marker;
 		MeterMarker* meter_marker;
-		TempoMapPoint const * point;
 
 		if ((tempo_marker = dynamic_cast<TempoMarker*> (*x)) != 0) {
-			if ((point = &tempo_marker->point()) != 0) {
+			Temporal::TempoPoint & tempo (tempo_marker->tempo());
 
-				tempo_marker->set_position (point->sample ());
+			tempo_marker->set_position (timepos_t (tempo.beats()));
 
-				if (prev_point && abs (prev_point->metric().end_note_types_per_minute() - point->metric().note_types_per_minute()) < 1.0) {
-					tempo_marker->set_points_color (UIConfiguration::instance().color ("tempo marker music"));
-				} else {
-					tempo_marker->set_points_color (UIConfiguration::instance().color ("tempo marker"));
-				}
-
-				max_tempo = max (max_tempo, point->metric().note_types_per_minute());
-				max_tempo = max (max_tempo, point->metric().end_note_types_per_minute());
-				min_tempo = min (min_tempo, point->metric().note_types_per_minute());
-				min_tempo = min (min_tempo, point->metric().end_note_types_per_minute());
-
-				prev_point = point;
+			if (prev_point && abs (prev_point->end_note_types_per_minute() - tempo.note_types_per_minute()) < 1.0) {
+				tempo_marker->set_points_color (UIConfiguration::instance().color ("tempo marker music"));
+			} else {
+				tempo_marker->set_points_color (UIConfiguration::instance().color ("tempo marker"));
 			}
-		}
-		if ((meter_marker = dynamic_cast<MeterMarker*> (*x)) != 0) {
-			if ((point = &meter_marker->point()) != 0) {
-				meter_marker->set_position (point->sample ());
-			}
+
+			max_tempo = max (max_tempo, tempo.note_types_per_minute());
+			max_tempo = max (max_tempo, tempo.end_note_types_per_minute());
+			min_tempo = min (min_tempo, tempo.note_types_per_minute());
+			min_tempo = min (min_tempo, tempo.end_note_types_per_minute());
+
+			prev_point = &tempo;
+
+		} else if ((meter_marker = dynamic_cast<MeterMarker*> (*x)) != 0) {
+			meter_marker->set_position (timepos_t (meter_marker->point().beats ()));
 		}
 	}
 
@@ -455,11 +454,7 @@ Editor::mouse_add_new_meter_event (timepos_t const & position)
 	begin_reversible_command (_("add meter mark"));
 	XMLNode &before = map.get_state();
 
-	if (meter_dialog.get_lock_style() == AudioTime) {
-		map.set_meter (Meter (bpb, note_type), timepos_t (requested).sample());
-	} else {
-		map.set_meter (Meter (bpb, note_type), timepos_t (requested));
-	}
+	map.set_meter (Meter (bpb, note_type), timepos_t (requested));
 
 	_session->add_command(new MementoCommand<TempoMap>(map, &before, &map.get_state()));
 	commit_reversible_command ();
@@ -482,12 +477,12 @@ Editor::remove_tempo_marker (ArdourCanvas::Item* item)
 	}
 
 	if (!tempo_marker->tempo().locked_to_meter() && tempo_marker->tempo().active()) {
-		real_remove_tempo_marker (tempo_marker->point());
+		real_remove_tempo_marker (tempo_marker->tempo());
 	}
 }
 
 void
-Editor::edit_meter_section (Temporal::TempoMapPoint const & point)
+Editor::edit_meter_section (Temporal::MeterPoint const & point)
 {
 	MeterDialog meter_dialog (_session->tempo_map(), point, _("done"));
 
@@ -518,7 +513,7 @@ Editor::edit_meter_section (Temporal::TempoMapPoint const & point)
 }
 
 void
-Editor::edit_tempo_section (Temporal::TempoMapPoint const & point)
+Editor::edit_tempo_section (Temporal::TempoPoint const & point)
 {
 	TempoDialog tempo_dialog (_session->tempo_map(), point, _("done"));
 
@@ -541,11 +536,7 @@ Editor::edit_tempo_section (Temporal::TempoMapPoint const & point)
 	begin_reversible_command (_("replace tempo mark"));
 	XMLNode &before = _session->tempo_map().get_state();
 
-	if (point.map()->time_domain() == AudioTime) {
-		_session->tempo_map().set_tempo (tempo, point.map()->sample_at (when));
-	} else {
-		_session->tempo_map().set_tempo (tempo, when);
-	}
+	_session->tempo_map().set_tempo (tempo, when);
 
 	XMLNode &after = _session->tempo_map().get_state();
 	_session->add_command (new MementoCommand<TempoMap>(_session->tempo_map(), &before, &after));
@@ -555,21 +546,21 @@ Editor::edit_tempo_section (Temporal::TempoMapPoint const & point)
 void
 Editor::edit_tempo_marker (TempoMarker& tm)
 {
-	edit_tempo_section (tm.point());
+	edit_tempo_section (tm.tempo());
 }
 
 void
 Editor::edit_meter_marker (MeterMarker& mm)
 {
-	edit_meter_section (mm.point());
+	edit_meter_section (mm.meter());
 }
 
 gint
-Editor::real_remove_tempo_marker (TempoMapPoint const & point)
+Editor::real_remove_tempo_marker (TempoPoint const & point)
 {
 	begin_reversible_command (_("remove tempo mark"));
 	XMLNode &before = _session->tempo_map().get_state();
-	_session->tempo_map().remove_tempo (point.tempo());
+	_session->tempo_map().remove_tempo (point);
 	XMLNode &after = _session->tempo_map().get_state();
 	_session->add_command(new MementoCommand<TempoMap>(_session->tempo_map(), &before, &after));
 	commit_reversible_command ();
@@ -594,16 +585,16 @@ Editor::remove_meter_marker (ArdourCanvas::Item* item)
 	}
 
 	if (!_session->tempo_map().is_initial (meter_marker->meter())) {
-		real_remove_meter_marker (meter_marker->point());
+		real_remove_meter_marker (meter_marker->meter());
 	}
 }
 
 gint
-Editor::real_remove_meter_marker (TempoMapPoint const & point)
+Editor::real_remove_meter_marker (Temporal::MeterPoint const & point)
 {
 	begin_reversible_command (_("remove tempo mark"));
 	XMLNode &before = _session->tempo_map().get_state();
-	_session->tempo_map().remove_meter (point.meter());
+	_session->tempo_map().remove_meter (point);
 	XMLNode &after = _session->tempo_map().get_state();
 	_session->add_command(new MementoCommand<TempoMap>(_session->tempo_map(), &before, &after));
 	commit_reversible_command ();

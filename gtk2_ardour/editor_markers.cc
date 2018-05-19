@@ -821,10 +821,10 @@ Editor::tempo_or_meter_marker_context_menu (GdkEventButton* ev, ArdourCanvas::It
 		build_meter_marker_menu (mm, can_remove);
 		meter_marker_menu->popup (1, ev->time);
 	} else if (tm) {
-		if (!tm->metric().active()) {
+		if (!tm->tempo().active()) {
 			return;
 		}
-		can_remove = _session->tempo_map().can_remove (tm->tempo()) && !tm->metric().locked_to_meter();
+		can_remove = _session->tempo_map().can_remove (tm->tempo()) && !tm->tempo().locked_to_meter();
 		delete tempo_marker_menu;
 		build_tempo_marker_menu (tm, can_remove);
 		tempo_marker_menu->popup (1, ev->time);
@@ -1377,9 +1377,9 @@ Editor::marker_menu_edit ()
 	dynamic_cast_marker_object (marker_menu_item->get_data ("marker"), &mm, &tm);
 
 	if (mm) {
-		edit_meter_section (mm->point());
+		edit_meter_section (mm->meter());
 	} else if (tm) {
-		edit_tempo_section (tm->point());
+		edit_tempo_section (tm->tempo());
 	}
 }
 

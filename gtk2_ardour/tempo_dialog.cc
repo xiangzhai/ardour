@@ -37,7 +37,7 @@ using namespace ARDOUR;
 using namespace PBD;
 using namespace Temporal;
 
-TempoDialog::TempoDialog (TempoMap& map, samplepos_t sample, const string&)
+TempoDialog::TempoDialog (TempoMap& map, timepos_t when, const string&)
 	: ArdourDialog (_("New Tempo"))
 	, _map (map)
 	, bpm_adjustment (60.0, 1.0, 999.9, 0.1, 1.0)
@@ -50,12 +50,12 @@ TempoDialog::TempoDialog (TempoMap& map, samplepos_t sample, const string&)
 	, pulse_selector_label (_("Pulse:"), ALIGN_LEFT, ALIGN_CENTER)
 	, tap_tempo_button (_("Tap tempo"))
 {
-	Temporal::BBT_Time when (map.bbt_at (sample));
-	TempoMapPoint const & point (_map.const_point_at (sample));
-	init (when, point.tempo().note_types_per_minute(), point.tempo().end_note_types_per_minute(), point.tempo().note_type(), Tempo::Constant, true, map.time_domain());
+	Temporal::BBT_Time bbt (when.bbt());
+	TempoPoint const & tempo (_map.tempo_at (bbt));
+	init (bbt, tempo.note_types_per_minute(), tempo.end_note_types_per_minute(), tempo.note_type(), Tempo::Constant, true, map.time_domain());
 }
 
-TempoDialog::TempoDialog (TempoMap& map, Temporal::TempoMapPoint const & point, const string&)
+TempoDialog::TempoDialog (TempoMap& map, Temporal::TempoPoint const & point, const string&)
 	: ArdourDialog (_("Edit Tempo"))
 	, _map (map)
 	, bpm_adjustment (60.0, 1.0, 999.9, 0.1, 1.0)
@@ -68,10 +68,8 @@ TempoDialog::TempoDialog (TempoMap& map, Temporal::TempoMapPoint const & point, 
 	, pulse_selector_label (_("Pulse:"), ALIGN_LEFT, ALIGN_CENTER)
 	, tap_tempo_button (_("Tap tempo"))
 {
-	Temporal::BBT_Time when (map.bbt_at (point.sample()));
-
-	init (when, point.tempo().note_types_per_minute(), point.tempo().end_note_types_per_minute(), point.tempo().note_type(), point.tempo().type(),
-	      (map.is_initial ((Tempo const &) point.tempo()) || (_map.time_domain() == Temporal::BarTime)), _map.time_domain());
+	init (point.bbt(), point.note_types_per_minute(), point.end_note_types_per_minute(), point.note_type(), point.type(),
+	      (map.is_initial (point) || (_map.time_domain() == Temporal::BarTime)), _map.time_domain());
 }
 
 void
@@ -486,12 +484,10 @@ MeterDialog::MeterDialog (TempoMap& map, timepos_t const & position, const strin
 	init (rounded, meter.divisions_per_bar(), meter.note_value(), false, BarTime);
 }
 
-MeterDialog::MeterDialog (TempoMap& map, TempoMapPoint const & point, const string&)
+MeterDialog::MeterDialog (TempoMap& map, Temporal::MeterPoint const & meter, const string&)
 	: ArdourDialog (_("Edit Meter"))
 {
-	Temporal::BBT_Time when (map.round_to_bar (point.bbt()));
-
-	init (when, point.metric().divisions_per_bar(), point.metric().note_value(), map.is_initial ((Meter const &) point.metric()), map.time_domain());
+	init (meter.bbt(), meter.divisions_per_bar(), meter.note_value(), map.is_initial (meter), map.time_domain());
 }
 
 void

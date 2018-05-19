@@ -766,7 +766,6 @@ public:
 
 private:
 	MeterMarker* _marker;
-	Temporal::TempoMapPoint const * _point;
 
 	bool _copy;
 	Editing::SnapType _old_snap_type;

@@ -33,7 +33,7 @@
 
 namespace Temporal {
 	class TempoMetric;
-	class TempoMapPoint;
+	class Point;
 	class TempoPoint;
 	class MeterPoint;
 }
@@ -144,25 +144,23 @@ private:
 class TempoMapMarker : public ArdourMarker
 {
   public:
-	TempoMapMarker (PublicEditor& editor, ArdourCanvas::Container &, guint32 rgba, const std::string& text, ArdourMarker::Type, Temporal::TempoMapPoint &);
+	TempoMapMarker (PublicEditor& editor, ArdourCanvas::Container &, guint32 rgba, const std::string& text, ArdourMarker::Type, Temporal::Point &);
 	~TempoMapMarker ();
 
-	void reset_point (Temporal::TempoMapPoint const & p) { _point = &p; }
+	void reset_point (Temporal::Point & p) { _point = &p; }
+	Temporal::Point & point() const { return *_point; }
 
-	Temporal::TempoMetric metric() const;
-	Temporal::TempoMapPoint const & point() const { return *_point; }
-
-  private:
+  protected:
 	/* semantically this is a reference but we need to sometimes rebind it,
 	   so it is a pointer instead.
 	*/
-	Temporal::TempoMapPoint const * _point;
+	Temporal::Point * _point;
 };
 
 class TempoMarker : public TempoMapMarker
 {
   public:
-	TempoMarker (PublicEditor& editor, ArdourCanvas::Container &, guint32 rgba, const std::string& text, Temporal::TempoMapPoint &);
+	TempoMarker (PublicEditor& editor, ArdourCanvas::Container &, guint32 rgba, const std::string& text, Temporal::TempoPoint &);
 
 	Temporal::TempoPoint & tempo() const;
 	void update_height_mark (const double ratio);
@@ -171,7 +169,7 @@ class TempoMarker : public TempoMapMarker
 class MeterMarker : public TempoMapMarker
 {
   public:
-	MeterMarker (PublicEditor& editor, ArdourCanvas::Container &, guint32 rgba, const std::string& text, Temporal::TempoMapPoint &);
+	MeterMarker (PublicEditor& editor, ArdourCanvas::Container &, guint32 rgba, const std::string& text, Temporal::MeterPoint &);
 
 	Temporal::MeterPoint & meter() const;
 };

@@ -300,7 +300,7 @@ Editor::import_smf_tempo_map (Evoral::SMF const & smf, timepos_t const & pos)
 			}
 
 		} else {
-			new_map.set_tempo (tempo, 0);
+			new_map.set_tempo (tempo, timepos_t (0));
 			new_map.set_meter (meter, Beats());
 			have_initial_meter = true;
 

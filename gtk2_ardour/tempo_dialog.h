@@ -1,3 +1,4 @@
+
 /*
     Copyright (C) 2000-2007 Paul Davis
 
@@ -38,8 +39,8 @@
 class TempoDialog : public ArdourDialog
 {
 public:
-	TempoDialog (Temporal::TempoMap&, samplepos_t, const std::string & action);
-	TempoDialog (Temporal::TempoMap&, Temporal::TempoMapPoint const &, const std::string & action);
+	TempoDialog (Temporal::TempoMap&, Temporal::timepos_t, const std::string & action);
+	TempoDialog (Temporal::TempoMap&, Temporal::TempoPoint const &, const std::string & action);
 
 	double get_bpm ();
 	double get_end_bpm ();
@@ -102,7 +103,7 @@ class MeterDialog : public ArdourDialog
 public:
 
 	MeterDialog (Temporal::TempoMap&, Temporal::timepos_t const &, const std::string & action);
-	MeterDialog (Temporal::TempoMap&, Temporal::TempoMapPoint const &, const std::string & action);
+	MeterDialog (Temporal::TempoMap&, Temporal::MeterPoint const &, const std::string & action);
 
 	double get_bpb ();
 	double get_note_type ();

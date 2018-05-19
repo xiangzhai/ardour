@@ -536,15 +536,15 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 
 	void change_tempo (TempoPoint&, Tempo const &);
 
-	TempoMapPoint const & set_tempo (Tempo const &, BBT_Time const &);
-	TempoMapPoint const & set_tempo (Tempo const &, Beats const &);
-	TempoMapPoint const & set_tempo (Tempo const &, timepos_t const &);
+	TempoPoint & set_tempo (Tempo const &, BBT_Time const &);
+	TempoPoint & set_tempo (Tempo const &, Beats const &);
+	TempoPoint & set_tempo (Tempo const &, timepos_t const &);
 
 	void remove_tempo (TempoPoint const &);
 
-	TempoMapPoint const & set_meter (Meter const &, BBT_Time const &);
-	TempoMapPoint const & set_meter (Meter const &, Beats const &);
-	TempoMapPoint const & set_meter (Meter const &, timepos_t const &);
+	MeterPoint & set_meter (Meter const &, BBT_Time const &);
+	MeterPoint & set_meter (Meter const &, Beats const &);
+	MeterPoint & set_meter (Meter const &, timepos_t const &);
 
 	void remove_meter (MeterPoint const &);
 
@@ -564,15 +564,15 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	Tempo const * next_tempo (Tempo const &) const;
 	Meter const * next_meter (Meter const &) const;
 
-	Meter const & meter_at (samplepos_t sc) const;
-	Meter const & meter_at (Beats const & b) const;
-	Meter const & meter_at (BBT_Time const & bbt) const;
-	Meter const & meter_at (timepos_t const &) const;
+	MeterPoint const & meter_at (samplepos_t pos) const;
+	MeterPoint const & meter_at (Beats const & b) const;
+	MeterPoint const & meter_at (BBT_Time const & bbt) const;
+	MeterPoint const & meter_at (timepos_t const &) const;
 
-	Tempo const & tempo_at (samplepos_t sc) const;
-	Tempo const & tempo_at (Beats const &b) const;
-	Tempo const & tempo_at (BBT_Time const & bbt) const;
-	Tempo const & tempo_at (timepos_t const & t) const;
+	TempoPoint const & tempo_at (samplepos_t pos) const;
+	TempoPoint const & tempo_at (Beats const &b) const;
+	TempoPoint const & tempo_at (BBT_Time const & bbt) const;
+	TempoPoint const & tempo_at (timepos_t const & t) const;
 
 	TempoMetric metric_at (samplepos_t sc) const { return  const_point_at (sc).metric(); }
 	TempoMetric metric_at (Beats const &b) const { return const_point_at (b).metric(); }
@@ -722,12 +722,12 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	TempoMapPoint & point_at (Beats const & b) { return *iterator_at (b); }
 	TempoMapPoint & point_at (BBT_Time const & bbt) { return *iterator_at (bbt); }
 
-	Meter const & meter_at_locked (superclock_t sc) const { return const_point_at (sc).meter(); }
-	Meter const & meter_at_locked (Beats const & b) const { return const_point_at (b).meter(); }
-	Meter const & meter_at_locked (BBT_Time const & bbt) const { return const_point_at (bbt).meter(); }
-	Tempo const & tempo_at_locked (superclock_t sc) const { return const_point_at (sc).tempo(); }
-	Tempo const & tempo_at_locked (Beats const &b) const { return const_point_at (b).tempo(); }
-	Tempo const & tempo_at_locked (BBT_Time const & bbt) const { return const_point_at (bbt).tempo(); }
+	MeterPoint const & meter_at_locked (superclock_t sc) const;
+	MeterPoint const & meter_at_locked (Beats const & b) const;
+	MeterPoint const & meter_at_locked (BBT_Time const & bbt) const;
+	TempoPoint const & tempo_at_locked (superclock_t sc) const;
+	TempoPoint const & tempo_at_locked (Beats const &b) const;
+	TempoPoint const & tempo_at_locked (BBT_Time const & bbt) const;
 
 	BBT_Time      bbt_at_locked (superclock_t sc) const;
 	BBT_Time      bbt_at_locked (Beats const &) const;
@@ -738,8 +738,8 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	int set_meters_from_state (XMLNode const &);
 	int set_music_times_from_state (XMLNode const &);
 
-	TempoMapPoint const & set_tempo (Tempo const &, superclock_t);
-	TempoMapPoint const & set_meter (Meter const &, superclock_t);
+	TempoPoint & set_tempo (Tempo const &, superclock_t);
+	MeterPoint & set_meter (Meter const &, superclock_t);
 
 	void maybe_rebuild();
 	void rebuild_locked (superclock_t limit);

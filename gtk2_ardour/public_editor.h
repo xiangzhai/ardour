@@ -484,8 +484,8 @@ public:
 
 	virtual void mouse_add_new_tempo_event (Temporal::timepos_t const & where) = 0;
 	virtual void mouse_add_new_meter_event (Temporal::timepos_t const & where) = 0;
-	virtual void edit_tempo_section (Temporal::TempoMapPoint const &) = 0;
-	virtual void edit_meter_section (Temporal::TempoMapPoint const &) = 0;
+	virtual void edit_tempo_section (Temporal::TempoPoint const &) = 0;
+	virtual void edit_meter_section (Temporal::MeterPoint const &) = 0;
 	virtual void edit_current_meter () = 0;
 	virtual void edit_current_tempo () = 0;
 

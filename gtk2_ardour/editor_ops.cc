@@ -6822,14 +6822,14 @@ Editor::define_one_bar (samplepos_t start, samplepos_t end)
 
 	if (do_global) {
 		Tempo nt (beats_per_minute, t.end_note_types_per_minute(), t.note_type());
-		_session->tempo_map().set_tempo (nt, 0);
+		_session->tempo_map().set_tempo (nt, timepos_t (0));
 	} else if (p.sample() == start) {
 		Tempo nt (beats_per_minute, t.end_note_types_per_minute(), t.note_type());
-		_session->tempo_map().set_tempo (nt, start);
+		_session->tempo_map().set_tempo (nt, timepos_t (start));
 	} else {
 		/* constant tempo */
 		const Tempo nt (beats_per_minute, t.note_type());
-		_session->tempo_map().set_tempo (nt, start);
+		_session->tempo_map().set_tempo (nt, timepos_t (start));
 	}
 
 	XMLNode& after (_session->tempo_map().get_state());

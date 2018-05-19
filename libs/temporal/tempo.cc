@@ -579,7 +579,7 @@ TempoMap::maybe_rebuild ()
 	}
 }
 
-Meter const &
+MeterPoint const &
 TempoMap::meter_at (timepos_t const & time) const
 {
 	switch (time.lock_style()) {
@@ -597,28 +597,28 @@ TempoMap::meter_at (timepos_t const & time) const
 	return meter_at (0);
 }
 
-Meter const &
+MeterPoint const &
 TempoMap::meter_at (samplepos_t s) const
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 	return meter_at_locked (S2Sc (s));
 }
 
-Meter const &
+MeterPoint const &
 TempoMap::meter_at (Temporal::Beats const & b) const
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 	return meter_at_locked (b);
 }
 
-Meter const &
+MeterPoint const &
 TempoMap::meter_at (Temporal::BBT_Time const & bbt) const
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 	return meter_at_locked (bbt);
 }
 
-Tempo const &
+TempoPoint const &
 TempoMap::tempo_at (timepos_t const & time) const
 {
 	switch (time.lock_style()) {
@@ -636,25 +636,49 @@ TempoMap::tempo_at (timepos_t const & time) const
 	return tempo_at (0);
 }
 
-Tempo const &
+TempoPoint const &
 TempoMap::tempo_at (samplepos_t s) const
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 	return tempo_at_locked (S2Sc(s));
 }
 
-Tempo const &
+TempoPoint const &
 TempoMap::tempo_at (Temporal::Beats const &b) const
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 	return tempo_at_locked (b);
 }
 
-Tempo const &
+TempoPoint const &
 TempoMap::tempo_at (Temporal::BBT_Time const & bbt) const
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 	return tempo_at_locked (bbt);
+}
+
+TempoPoint const &
+TempoMap::tempo_at_locked (superclock_t sc) const
+{
+	assert (!_tempos.empty());
+	TempoPoint m (Tempo (1, 1), sc, Beats(), BBT_Time ());
+	return *lower_bound (_tempos.begin(), _tempos.end(), m, Point::sclock_comparator());
+}
+
+TempoPoint const &
+TempoMap::tempo_at_locked (BBT_Time const & bbt) const
+{
+	assert (!_tempos.empty());
+	TempoPoint m (Tempo (1, 1), 0, Beats(), bbt);
+	return *lower_bound (_tempos.begin(), _tempos.end(), m, Point::bbt_comparator());
+}
+
+TempoPoint const &
+TempoMap::tempo_at_locked (Beats const & beats) const
+{
+	assert (!_tempos.empty());
+	TempoPoint m (Tempo (1, 1), 0, beats, BBT_Time());
+	return *lower_bound (_tempos.begin(), _tempos.end(), m, Point::beat_comparator());
 }
 
 void
@@ -958,10 +982,10 @@ TempoMap::change_tempo (TempoPoint & p, Tempo const & t)
 	set_dirty (true);
 }
 
-TempoMapPoint const &
+TempoPoint &
 TempoMap::set_tempo (Tempo const & t, superclock_t sc)
 {
-	TempoMapPoint const * ret;
+	TempoPoint * ret;
 
 	{
 		TraceableWriterLock lm (_lock);
@@ -984,11 +1008,9 @@ TempoMap::set_tempo (Tempo const & t, superclock_t sc)
 		sc = point.tempo().superclock_at_qn (beats);
 
 		TempoPoint tp (t, sc, beats, bbt);
-		add_tempo (tp);
+		ret = add_tempo (tp);
 
 		rebuild ();
-
-		ret = &const_point_at (tp.sclock());
 	}
 
 	Changed (0, _points.back().sample());
@@ -996,10 +1018,10 @@ TempoMap::set_tempo (Tempo const & t, superclock_t sc)
 	return *ret;
 }
 
-TempoMapPoint const &
+TempoPoint &
 TempoMap::set_tempo (Tempo const & t, BBT_Time const & bbt)
 {
-	TempoMapPoint const * ret;
+	TempoPoint * ret = 0;
 
 	{
 		TraceableWriterLock lm (_lock);
@@ -1018,11 +1040,9 @@ TempoMap::set_tempo (Tempo const & t, BBT_Time const & bbt)
 		sc = point.tempo().superclock_at_qn (beats);
 
 		TempoPoint tp (t, sc, beats, on_beat);
-		(void) add_tempo (tp);
+		ret = add_tempo (tp);
 
 		rebuild ();
-
-		ret = &const_point_at (tp.sclock());
 	}
 
 	Changed (0, _points.back().sample());
@@ -1030,10 +1050,10 @@ TempoMap::set_tempo (Tempo const & t, BBT_Time const & bbt)
 	return *ret;
 }
 
-TempoMapPoint const &
+TempoPoint &
 TempoMap::set_tempo (Tempo const & t, Beats const & beats)
 {
-	TempoMapPoint const * ret;
+	TempoPoint * ret;
 
 	{
 		TraceableWriterLock lm (_lock);
@@ -1052,11 +1072,9 @@ TempoMap::set_tempo (Tempo const & t, Beats const & beats)
 		sc = point.tempo().superclock_at_qn (on_beat);
 
 		TempoPoint tp (t, sc, on_beat, bbt);
-		(void) add_tempo (tp);
+		ret = add_tempo (tp);
 
 		rebuild ();
-
-		ret = &const_point_at (tp.sclock());
 	}
 
 	Changed (0, _points.back().sample());
@@ -1064,7 +1082,7 @@ TempoMap::set_tempo (Tempo const & t, Beats const & beats)
 	return *ret;
 }
 
-TempoMapPoint const &
+TempoPoint &
 TempoMap::set_tempo (Tempo const & t, timepos_t const & time)
 {
 	switch (time.lock_style()) {
@@ -1134,6 +1152,12 @@ TempoMap::remove_tempo (TempoPoint const & tp)
 	}
 
 	Changed (0, _points.back().sample());
+}
+
+bool
+TempoMap::move_meter (MeterPoint const & mp, timepos_t const & when, bool push)
+{
+	return true;
 }
 
 bool
@@ -1253,7 +1277,7 @@ TempoMap::move_tempo (TempoPoint const & tp, timepos_t const & when, bool push)
 	return true;
 }
 
-TempoMapPoint const &
+MeterPoint &
 TempoMap::set_meter (Meter const & m, timepos_t const & time)
 {
 	switch (time.lock_style()) {
@@ -1269,10 +1293,10 @@ TempoMap::set_meter (Meter const & m, timepos_t const & time)
 }
 
 
-TempoMapPoint const &
+MeterPoint &
 TempoMap::set_meter (Meter const & t, BBT_Time const & bbt)
 {
-	TempoMapPoint const * ret = 0;
+	MeterPoint * ret = 0;
 
 	{
 		TraceableWriterLock lm (_lock);
@@ -1296,11 +1320,9 @@ TempoMap::set_meter (Meter const & t, BBT_Time const & bbt)
 
 		cerr << "Adding " << mp << endl;
 
-		add_meter (mp);
+		ret = add_meter (mp);
 
 		rebuild ();
-
-		ret = &const_point_at (rounded_bbt);
 	}
 
 	Changed (0, _points.back().sample());
@@ -1308,10 +1330,10 @@ TempoMap::set_meter (Meter const & t, BBT_Time const & bbt)
 	return *ret;
 }
 
-TempoMapPoint const &
+MeterPoint &
 TempoMap::set_meter (Meter const & t, Beats const & beats)
 {
-	TempoMapPoint const * ret = 0;
+	MeterPoint * ret = 0;
 
 	{
 		TraceableWriterLock lm (_lock);
@@ -1330,11 +1352,9 @@ TempoMap::set_meter (Meter const & t, Beats const & beats)
 
 		MeterPoint mp (t, sc, rounded_beats, rounded_bbt);
 
-		add_meter (mp);
+		ret = add_meter (mp);
 
 		rebuild ();
-
-		ret = &const_point_at (rounded_beats);
 	}
 
 	Changed (0, _points.back().sample());
@@ -1342,10 +1362,10 @@ TempoMap::set_meter (Meter const & t, Beats const & beats)
 	return *ret;
 }
 
-TempoMapPoint const &
+MeterPoint &
 TempoMap::set_meter (Meter const & m, superclock_t sc)
 {
-	TempoMapPoint const * ret = 0;
+	MeterPoint * ret = 0;
 
 	{
 		TraceableWriterLock lm (_lock);
@@ -1371,11 +1391,9 @@ TempoMap::set_meter (Meter const & m, superclock_t sc)
 		sc = point.tempo().superclock_at_qn (beats);
 
 		MeterPoint mp (m, sc, beats, bbt);
-		add_meter (mp);
+		ret = add_meter (mp);
 
 		rebuild ();
-
-		ret = &const_point_at (sc);
 	}
 
 	Changed (0, _points.back().sample());
@@ -2431,4 +2449,28 @@ TempoMap::previous_tempo (TempoMapPoint const & point) const
 	}
 
 	return 0;
+}
+
+MeterPoint const &
+TempoMap::meter_at_locked (superclock_t sc) const
+{
+	assert (!_meters.empty());
+	MeterPoint m (Meter (1, 1), sc, Beats(), BBT_Time ());
+	return *lower_bound (_meters.begin(), _meters.end(), m, Point::sclock_comparator());
+}
+
+MeterPoint const &
+TempoMap::meter_at_locked (BBT_Time const & bbt) const
+{
+	assert (!_meters.empty());
+	MeterPoint m (Meter (1, 1), 0, Beats(), bbt);
+	return *lower_bound (_meters.begin(), _meters.end(), m, Point::bbt_comparator());
+}
+
+MeterPoint const &
+TempoMap::meter_at_locked (Beats const & beats) const
+{
+	assert (!_meters.empty());
+	MeterPoint m (Meter (1, 1), 0, beats, BBT_Time());
+	return *lower_bound (_meters.begin(), _meters.end(), m, Point::beat_comparator());
 }
