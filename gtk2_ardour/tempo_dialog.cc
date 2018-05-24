@@ -479,8 +479,6 @@ MeterDialog::MeterDialog (TempoMap& map, timepos_t const & position, const strin
 	BBT_Time rounded (map.round_to_bar (position.bbt()));
 	Meter meter (map.meter_at (rounded));
 
-	cerr << "MD pos was " << position << " bbt = " << position.bbt() << " rounded " << rounded << endl;
-
 	init (rounded, meter.divisions_per_bar(), meter.note_value(), false, BarTime);
 }
 

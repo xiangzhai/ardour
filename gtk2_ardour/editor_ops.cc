@@ -6814,17 +6814,16 @@ Editor::define_one_bar (samplepos_t start, samplepos_t end)
 		*/
 	}
 
-	TempoMapPoint const & p (_session->tempo_map().const_point_at (start));
-	Tempo const & t (p.metric());
+	TempoMetric const & t (_session->tempo_map().metric_at (start));
 
 	begin_reversible_command (_("set tempo from region"));
 	XMLNode& before (_session->tempo_map().get_state());
 
 	if (do_global) {
-		Tempo nt (beats_per_minute, t.end_note_types_per_minute(), t.note_type());
+		Tempo nt (beats_per_minute, t.tempo.end_note_types_per_minute(), t.note_type());
 		_session->tempo_map().set_tempo (nt, timepos_t (0));
-	} else if (p.sample() == start) {
-		Tempo nt (beats_per_minute, t.end_note_types_per_minute(), t.note_type());
+	} else if (t.tempo.sclock() == samples_to_superclock (start, _session->sample_rate())) {
+		Tempo nt (beats_per_minute, t.tempo.end_note_types_per_minute(), t.note_type());
 		_session->tempo_map().set_tempo (nt, timepos_t (start));
 	} else {
 		/* constant tempo */

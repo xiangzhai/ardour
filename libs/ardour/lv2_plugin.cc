@@ -2583,7 +2583,7 @@ LV2Plugin::connect_and_run(BufferSet& bufs,
 
 	if (_bpm_control_port) {
 		/* note that this is not necessarily quarter notes */
-		*_bpm_control_port = first_tempo_map_point.metric().note_types_per_minute();
+		*_bpm_control_port = first_tempo_map_point.metric().tempo.note_types_per_minute();
 	}
 
 #ifdef LV2_EXTENDED
@@ -2655,7 +2655,7 @@ LV2Plugin::connect_and_run(BufferSet& bufs,
 			if (valid && (flags & PORT_INPUT)) {
 				if ((flags & PORT_POSITION)) {
 					Temporal::BBT_Time bbt (first_tempo_map_point.bbt());
-					double bpm = first_tempo_map_point.metric().note_types_per_minute();
+					double bpm = first_tempo_map_point.metric().tempo.note_types_per_minute();
 					double beatpos = (bbt.bars - 1) * first_tempo_map_point.metric().divisions_per_bar()
 					               + (bbt.beats - 1)
 					               + (bbt.ticks / Temporal::ticks_per_beat);
@@ -2708,7 +2708,7 @@ LV2Plugin::connect_and_run(BufferSet& bufs,
 						++m;
 					} else {
 						const Temporal::BBT_Time bbt = tempo_map_point->bbt_at (sample);
-						double bpm = tempo_map_point->metric().quarter_notes_per_minute ();
+						double bpm = tempo_map_point->metric().tempo.quarter_notes_per_minute ();
 
 						write_position(&_impl->forge, _ev_buffers[port_index],
 						               tempo_map_point->metric(), bbt, speed, bpm,
@@ -2995,7 +2995,7 @@ LV2Plugin::connect_and_run(BufferSet& bufs,
 		 * so it needs to be realative to that.
 		 */
 		TempoMapPoint const & tmp = tmap.const_point_at (start);
-		_current_bpm = tmp.metric().note_types_per_minute();
+		_current_bpm = tmp.metric().tempo.note_types_per_minute();
 		Temporal::BBT_Time bbt (tmp.bbt_at (start));
 		double beatpos = (bbt.bars - 1) * tmp.metric().divisions_per_bar()
 		               + (bbt.beats - 1)

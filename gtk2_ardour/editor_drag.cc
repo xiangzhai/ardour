@@ -3579,18 +3579,18 @@ TempoMarkerDrag::motion (GdkEvent* event, bool first_move)
 
 	} else if (_movable) {
 
-		timepos_t pf;
+		timepos_t pos;
 
 		if (_editor->snap_musical()) {
 			/* we can't snap to a grid that we are about to move.
 			 * gui_move_tempo() will sort out snap using the supplied beat divisions.
 			*/
-			pf = adjusted_current_time (event, false);
+			pos = adjusted_current_time (event, false);
 		} else {
-			pf = adjusted_current_time (event);
+			pos = adjusted_current_time (event);
 		}
 
-		map.move_tempo (_marker->tempo(), pf, false);
+		map.move_tempo (_marker->tempo(), pos, false);
 
 		show_verbose_cursor_time (timepos_t (_marker->point().beats()));
 	}
@@ -3953,12 +3953,12 @@ TempoEndDrag::start_grab (GdkEvent* event, Gdk::Cursor* cursor)
 
 	if (prev != 0) {
 		_editor->tempo_curve_selected (prev, true);
-		sstr << "end: " << fixed << setprecision(3) << _point->metric().end_note_types_per_minute() << "\n";
+		sstr << "end: " << fixed << setprecision(3) << _point->metric().tempo.end_note_types_per_minute() << "\n";
 	}
 
-	if (_point->metric().clamped()) {
+	if (_point->metric().tempo.clamped()) {
 		_editor->tempo_curve_selected (_point, true);
-		sstr << "start: " << fixed << setprecision(3) << _point->metric().note_types_per_minute();
+		sstr << "start: " << fixed << setprecision(3) << _point->metric().tempo.note_types_per_minute();
 	}
 
 	show_verbose_cursor_text (sstr.str());
@@ -4020,7 +4020,7 @@ TempoEndDrag::finished (GdkEvent* event, bool movement_occurred)
 		_editor->tempo_curve_selected (prev, false);
 	}
 
-	if (_point->metric().clamped()) {
+	if (_point->metric().tempo.clamped()) {
 		_editor->tempo_curve_selected (_point, false);
 
 	}

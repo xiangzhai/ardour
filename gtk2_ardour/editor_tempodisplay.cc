@@ -116,10 +116,10 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 
 		if (i->is_explicit_tempo()) {
 
-			max_tempo = max (max_tempo, metric.note_types_per_minute());
-			max_tempo = max (max_tempo, metric.end_note_types_per_minute());
-			min_tempo = min (min_tempo, metric.note_types_per_minute());
-			min_tempo = min (min_tempo, metric.end_note_types_per_minute());
+			max_tempo = max (max_tempo, metric.tempo.note_types_per_minute());
+			max_tempo = max (max_tempo, metric.tempo.end_note_types_per_minute());
+			min_tempo = min (min_tempo, metric.tempo.note_types_per_minute());
+			min_tempo = min (min_tempo, metric.tempo.end_note_types_per_minute());
 			uint32_t const tc_color = UIConfiguration::instance().color ("tempo curve");
 
 			tempo_curves.push_back (new TempoCurve (*this, *tempo_group, tc_color, *i, i->sample(), false));
@@ -131,7 +131,7 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker"), tname, i->tempo()));
 			}
 
-			if (prev_ts != points.end() && abs (prev_ts->metric().end_note_types_per_minute() - i->metric().note_types_per_minute()) < 1.0) {
+			if (prev_ts != points.end() && abs (prev_ts->metric().tempo.end_note_types_per_minute() - i->metric().tempo.note_types_per_minute()) < 1.0) {
 				metric_marks.back()->set_points_color (UIConfiguration::instance().color ("tempo marker music"));
 			} else {
 				metric_marks.back()->set_points_color (UIConfiguration::instance().color ("tempo marker"));
@@ -162,7 +162,7 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 			(*x)->set_position ((*x)->point().sample(), UINT32_MAX);
 		}
 
-		if (!(*x)->point().metric().active()) {
+		if (!(*x)->point().metric().tempo.active()) {
 			(*x)->hide();
 		} else {
 			(*x)->show();
@@ -263,7 +263,7 @@ Editor::tempo_map_changed (samplepos_t, samplepos_t)
 			(*x)->set_position ((*x)->point().sample(), UINT32_MAX);
 		}
 
-		if (!(*x)->point().metric().active()) {
+		if (!(*x)->point().metric().tempo.active()) {
 			(*x)->hide();
 		} else {
 			(*x)->show();
@@ -406,20 +406,28 @@ Editor::mouse_add_new_tempo_event (timepos_t const & position)
 	}
 
 	TempoMap& map(_session->tempo_map());
+	TempoDialog tempo_dialog (map, position, _("add"));
 
-	begin_reversible_command (_("add tempo mark"));
-
-	if (position > std::numeric_limits<timepos_t>::min()) {
-		XMLNode &before = map.get_state();
-		/* add music-locked ramped (?) tempo using the bpm/note type at sample*/
-		map.set_tempo (map.tempo_at (position), position);
-
-		XMLNode &after = map.get_state();
-		_session->add_command(new MementoCommand<TempoMap>(map, &before, &after));
-		commit_reversible_command ();
+	switch (tempo_dialog.run ()) {
+	case RESPONSE_ACCEPT:
+		break;
+	default:
+		return;
 	}
 
-	//map.dump (cerr);
+	double bpm = tempo_dialog.get_bpm ();
+	double end_bpm = tempo_dialog.get_end_bpm ();
+	double note_type = tempo_dialog.get_note_type ();
+
+	Temporal::BBT_Time requested;
+	tempo_dialog.get_bbt_time (requested);
+
+	begin_reversible_command (_("add tempo mark"));
+	XMLNode &before = map.get_state();
+	map.set_tempo (Tempo (bpm, end_bpm, note_type), requested);
+	XMLNode &after = map.get_state();
+	_session->add_command(new MementoCommand<TempoMap>(map, &before, &after));
+	commit_reversible_command ();
 }
 
 void
@@ -428,8 +436,6 @@ Editor::mouse_add_new_meter_event (timepos_t const & position)
 	if (_session == 0) {
 		return;
 	}
-
-	cerr << "create new meter at " << position << endl;
 
 	TempoMap& map(_session->tempo_map());
 	MeterDialog meter_dialog (map, position, _("add"));
@@ -448,8 +454,6 @@ Editor::mouse_add_new_meter_event (timepos_t const & position)
 
 	Temporal::BBT_Time requested;
 	meter_dialog.get_bbt_time (requested);
-
-	cerr << "new meter is at " << requested << endl;
 
 	begin_reversible_command (_("add meter mark"));
 	XMLNode &before = map.get_state();

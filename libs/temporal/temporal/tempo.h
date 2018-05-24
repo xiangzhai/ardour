@@ -114,14 +114,15 @@ class LIBTEMPORAL_API Point {
 
 	virtual ~Point() {}
 
+	virtual void set (superclock_t sc, Beats const & b, BBT_Time const & bbt) {
+		_sclock = sc;
+		_quarters = b;
+		_bbt = bbt;
+	}
+
 	superclock_t sclock() const      { return _sclock; }
-	virtual void set_sclock (superclock_t sc) { _sclock = sc; }
-
 	Beats const & beats() const { return _quarters; }
-	virtual void  set_beats (Beats const & b) { _quarters = b; }
-
 	BBT_Time const & bbt() const { return _bbt; }
-	virtual void     set_bbt (BBT_Time const & bbt) { _bbt = bbt; }
 
 	struct sclock_comparator {
 		bool operator() (Point const & a, Point const & b) const {
@@ -140,6 +141,11 @@ class LIBTEMPORAL_API Point {
 			return a.bbt() < b.bbt();
 		}
 	};
+
+	/* all time members are supposed to be synced at all times, so we need
+	   test only one.
+	*/
+	inline bool operator== (Point const & other) const { return _sclock == other._sclock; }
 
   protected:
 	superclock_t          _sclock;
@@ -229,6 +235,16 @@ class LIBTEMPORAL_API Tempo {
 
 	XMLNode& get_state () const;
 
+	bool operator== (Tempo const & other) const {
+		return _superclocks_per_note_type == other._superclocks_per_note_type &&
+			_end_superclocks_per_note_type == other._end_superclocks_per_note_type &&
+			_note_type == other._note_type &&
+			_active == other._active &&
+			_locked_to_meter == other._locked_to_meter &&
+			_clamped == other._clamped &&
+			_type == other._type;
+	}
+
   protected:
 	superclock_t _superclocks_per_note_type;
 	superclock_t _end_superclocks_per_note_type;
@@ -254,8 +270,8 @@ class LIBTEMPORAL_API Meter {
 	int divisions_per_bar () const { return _divisions_per_bar; }
 	int note_value() const { return _note_value; }
 
-	inline bool operator==(const Meter& other) { return _divisions_per_bar == other.divisions_per_bar() && _note_value == other.note_value(); }
-	inline bool operator!=(const Meter& other) { return _divisions_per_bar != other.divisions_per_bar() || _note_value != other.note_value(); }
+	inline bool operator==(const Meter& other) const { return _divisions_per_bar == other.divisions_per_bar() && _note_value == other.note_value(); }
+	inline bool operator!=(const Meter& other) const { return _divisions_per_bar != other.divisions_per_bar() || _note_value != other.note_value(); }
 
 	Meter& operator=(Meter const & other) {
 		if (&other != this) {
@@ -265,13 +281,10 @@ class LIBTEMPORAL_API Meter {
 		return *this;
 	}
 
-	BBT_Time   bbt_add (BBT_Time const & bbt, BBT_Offset const & add) const;
-	BBT_Time   bbt_subtract (BBT_Time const & bbt, BBT_Offset const & sub) const;
-	BBT_Offset bbt_delta (BBT_Time const & bbt, BBT_Time const & sub) const;
-
+	BBT_Time bbt_add (BBT_Time const & bbt, BBT_Offset const & add) const;
+	BBT_Time bbt_subtract (BBT_Time const & bbt, BBT_Offset const & sub) const;
 	BBT_Time round_to_bar (BBT_Time const &) const;
-
-	Beats to_quarters (BBT_Offset const &) const;
+	Beats    to_quarters (BBT_Offset const &) const;
 
 	XMLNode& get_state () const;
 
@@ -291,6 +304,9 @@ class LIBTEMPORAL_API MeterPoint : public Meter, public Point
   public:
 	MeterPoint (Meter const & m, superclock_t sc, Beats const & b, BBT_Time const & bbt) : Meter (m), Point (sc, b, bbt) {}
 	MeterPoint (XMLNode const &);
+
+	Beats quarters_at (BBT_Time const & bbt) const;
+	BBT_Time bbt_at (Beats const & beats) const;
 
 	XMLNode& get_state () const;
 };
@@ -314,7 +330,7 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 		return *this;
 	}
 
-	superclock_t superclock_at_qn (Beats const & qn) const;
+	superclock_t superclock_at (Beats const & qn) const;
 
 	double c_per_superclock () const { return _c_per_superclock; }
 	double c_per_quarter () const { return _c_per_quarter; }
@@ -322,7 +338,13 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 	void compute_c_superclock (samplecnt_t sr, superclock_t end_superclocks_per_note_type, superclock_t duration);
 	void compute_c_quarters (samplecnt_t sr, superclock_t end_superclocks_per_note_type, Beats const & duration);
 
+	Beats quarters_at (superclock_t sc) const;
+
 	XMLNode& get_state () const;
+
+	bool operator== (TempoPoint const & other) const {
+		return Tempo::operator== (other) && Point::operator== (other);
+	}
 
   private:
 	double _c_per_quarter;
@@ -331,25 +353,69 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 
 /** Helper class to perform computations that require both Tempo and Meter
     at a given point in time.
+
+    It may seem nicer to make this IS-A TempoPoint and IS-A MeterPoint. Doing
+    so runs into multiple inheritance of Point, plus the major semantic issue
+    that pairing a tempo and a meter does in fact allow for two positions, not
+    one. That means we have to provide accessors to the TempoPoint and
+    MeterPoint and thus it may as well be HAS-A rather than IS-A.
+
+    This object should always be short lived. It holds references to a
+    TempoPoint and a MeterPoint that are not lifetime-managed. It's just a
+    convenience object, in essence, to avoid having to replicate the
+    computation code that requires both tempo and meter information every place
+    it is used.
 */
-class LIBTEMPORAL_API TempoMetric : public TempoPoint, public Meter {
+class LIBTEMPORAL_API TempoMetric {
   public:
-	TempoMetric (TempoPoint const & tp, Meter const & m) : TempoPoint (tp), Meter (m) {}
-	TempoMetric (Tempo const & t, Meter const & m, Point const & p) : TempoPoint (t, p), Meter (m) {}
+	TempoMetric (TempoPoint const & t, MeterPoint const & m) : tempo (t), meter (m) {}
 	~TempoMetric () {}
 
+	TempoPoint const & tempo;
+	MeterPoint const & meter;
+
+	/* even more convenient wrappers for individual aspects of a
+	 * TempoMetric (i.e. just tempo or just meter information required
+	 */
+
+	superclock_t superclock_at (Beats const & qn) const { return tempo.superclock_at (qn); }
+	Beats quarters_at (superclock_t sc) const { return tempo.quarters_at (sc); }
+	Beats quarters_at (BBT_Time const & bbt) const { return meter.quarters_at (bbt); }
+	BBT_Time bbt_at (Beats const & beats) const { return meter.bbt_at (beats); }
+
+	superclock_t superclocks_per_note_type () const { return tempo.superclocks_per_note_type (); }
+	superclock_t end_superclocks_per_note_type () const {return tempo.end_superclocks_per_note_type (); }
+	superclock_t superclocks_per_note_type (int note_type) const {return tempo.superclocks_per_note_type (note_type); }
+	superclock_t superclocks_per_quarter_note () const {return tempo.superclocks_per_quarter_note (); }
+	superclock_t superclocks_per_ppqn () const {return tempo.superclocks_per_ppqn (); }
+
+	int note_type () const { return tempo.note_type(); }
+	int divisions_per_bar () const { return meter.divisions_per_bar(); }
+	int note_value() const { return meter.note_value(); }
+	BBT_Time   bbt_add (BBT_Time const & bbt, BBT_Offset const & add) const { return meter.bbt_add (bbt, add); }
+	BBT_Time   bbt_subtract (BBT_Time const & bbt, BBT_Offset const & sub) const { return meter.bbt_subtract (bbt, sub); }
+	BBT_Time round_to_bar (BBT_Time const & bbt) const { return meter.round_to_bar (bbt); }
+	Beats to_quarters (BBT_Offset const & bbo) const { return meter.to_quarters (bbo); }
+
+	/* combination methods that require both tempo and meter information */
+
 	superclock_t superclocks_per_bar (samplecnt_t sr) const {
-		return superclocks_per_grid (sr) * _divisions_per_bar;
+		return superclocks_per_grid (sr) * meter.divisions_per_bar();
 	}
 	superclock_t superclocks_per_grid (samplecnt_t sr) const {
-		return (superclock_ticks_per_second * Meter::note_value()) / (note_types_per_minute() / Tempo::note_type());
+		return (superclock_ticks_per_second * meter.note_value()) / (tempo.note_types_per_minute() / tempo.note_type());
 	}
 
 	superclock_t superclock_per_note_type_at_superclock (superclock_t sc) const {
-		return superclocks_per_note_type () * expm1 (c_per_superclock() * sc);
+		return tempo.superclocks_per_note_type () * expm1 (tempo.c_per_superclock() * sc);
 	}
 
-	/* technically this is returning samplecnt_t but that type is not available here */
+	BBT_Time bbt_at (superclock_t sc) const;
+
+	/* XXX technically this is returning ARDOUR::samplecnt_t but that type is
+	   not available here in libtemporal.
+	*/
+
 	superclock_t samples_per_bar (samplecnt_t sr) const {
 		return superclock_to_samples (superclocks_per_bar (sr), sr);
 	}
@@ -363,6 +429,7 @@ class LIBTEMPORAL_API TempoMetric : public TempoPoint, public Meter {
 class LIBTEMPORAL_API MusicTimePoint : public Point
 {
   public:
+	MusicTimePoint () : Point (0, Beats(), BBT_Time()) {}
 	MusicTimePoint (BBT_Time const & bbt_time, Point const & p) : Point (p) { _bbt = bbt_time; }
 	MusicTimePoint (XMLNode const &);
 
@@ -471,32 +538,11 @@ class LIBTEMPORAL_API TempoMapPoint : public Point
 	Beats const &       tempo_quarters() const { return _tempo->beats(); }
 	BBT_Time const &    tempo_bbt() const      { return _tempo->bbt(); }
 
+	Beats quarters_at (superclock_t sc) const { return tempo().quarters_at (sc); }
+	Beats quarters_at (BBT_Time const & bbt) const { return meter().quarters_at (bbt); }
 
-	/* None of these properties can be set for an Implicit point, because
-	 * they are determined by prior Explicit points.
-	 */
-
-	void set_sclock (superclock_t  sc) { if (is_explicit()) { Point::set_sclock (sc); } }
-	void set_quarters (Beats const & q) { if (is_explicit()) { Point::set_beats (q); } }
-	void set_bbt (BBT_Time const & bbt) {  if (is_explicit()) { Point::set_bbt (bbt); } }
-
-	Beats quarters_at (superclock_t sc) const;
-	Beats quarters_at (BBT_Time const &) const;
-
-	BBT_Time bbt_at (Beats const &) const;
-	BBT_Time bbt_at (superclock_t) const;
-
-	struct SuperClockComparator {
-		bool operator() (TempoMapPoint const & a, TempoMapPoint const & b) const { return a.sclock() < b.sclock(); }
-	};
-
-	struct QuarterComparator {
-		bool operator() (TempoMapPoint const & a, TempoMapPoint const & b) const { return a.quarters() < b.quarters(); }
-	};
-
-	struct BBTComparator {
-		bool operator() (TempoMapPoint const & a, TempoMapPoint const & b) const { return a.bbt() < b.bbt(); }
-	};
+	BBT_Time bbt_at (Beats const & beats) const { return meter().bbt_at (beats); }
+	BBT_Time bbt_at (samplepos_t) const;
 
 	superclock_t  walk_to_superclock (superclock_t start, Beats const & distance) const;
 	Beats walk_to_quarters (superclock_t start, superclock_t distance) const;
@@ -574,15 +620,16 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	TempoPoint const & tempo_at (BBT_Time const & bbt) const;
 	TempoPoint const & tempo_at (timepos_t const & t) const;
 
-	TempoMetric metric_at (samplepos_t sc) const { return  const_point_at (sc).metric(); }
-	TempoMetric metric_at (Beats const &b) const { return const_point_at (b).metric(); }
-	TempoMetric metric_at (BBT_Time const & bbt) const {return const_point_at (bbt).metric(); }
+	TempoMetric metric_at (timepos_t const &) const;
+	TempoMetric metric_at (samplepos_t sc) const;
+	TempoMetric metric_at (Beats const &b) const;
+	TempoMetric metric_at (BBT_Time const & bbt) const;
 
 	TempoMapPoint const * previous_tempo (TempoMapPoint const &) const;
 
 	/* convenience function */
 	BBT_Time round_to_bar (BBT_Time const & bbt) const {
-		return const_point_at (bbt).metric().round_to_bar (bbt);
+		return metric_at (bbt).meter.round_to_bar (bbt);
 	}
 
 	BBT_Time bbt_at (samplepos_t sc) const;
@@ -729,6 +776,10 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	TempoPoint const & tempo_at_locked (Beats const &b) const;
 	TempoPoint const & tempo_at_locked (BBT_Time const & bbt) const;
 
+	TempoMetric metric_at_locked (superclock_t) const;
+	TempoMetric metric_at_locked (Beats const &) const;
+	TempoMetric metric_at_locked (BBT_Time const &) const;
+
 	BBT_Time      bbt_at_locked (superclock_t sc) const;
 	BBT_Time      bbt_at_locked (Beats const &) const;
 	samplepos_t   sample_at_locked (Beats const &) const;
@@ -748,6 +799,9 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	TempoPoint* add_tempo (TempoPoint const &);
 	MeterPoint* add_meter (MeterPoint const &);
 	MusicTimePoint* add_music_time_point (MusicTimePoint const &);
+
+	void solve (superclock_t sc, Beats & beats, BBT_Time & bbt) const;
+	void solve (Beats const & beats, superclock_t & sc, BBT_Time & bbt) const;
 };
 
 } /* end of namespace Temporal */
@@ -769,6 +823,7 @@ std::ostream& operator<<(std::ostream& str, Temporal::Meter const &);
 std::ostream& operator<<(std::ostream& str, Temporal::Point const &);
 std::ostream& operator<<(std::ostream& str, Temporal::TempoPoint const &);
 std::ostream& operator<<(std::ostream& str, Temporal::MeterPoint const &);
+std::ostream& operator<<(std::ostream& str, Temporal::TempoMetric const &);
 }
 
 #endif /* __temporal_tempo_h__ */

@@ -1275,16 +1275,16 @@ AudioClock::_set_bbt (Temporal::BBT_Time const & BBT, bool negative)
 
 	if (_with_info) {
 
-		Temporal::TempoMetric const & m (_session->tempo_map().const_point_at (BBT).metric());
+		Temporal::TempoMetric const & m (_session->tempo_map().metric_at(BBT));
 
 		if (m.note_type() == 4) {
-			snprintf (buf, sizeof(buf), "\u2669 = %.3f", m.note_types_per_minute());
+			snprintf (buf, sizeof(buf), "\u2669 = %.3f", m.tempo.note_types_per_minute());
 			_left_btn.set_text (string_compose ("%1", buf), true);
 		} else if (m.note_type() == 8) {
-			snprintf (buf, sizeof(buf), "\u266a = %.3f", m.note_types_per_minute());
+			snprintf (buf, sizeof(buf), "\u266a = %.3f", m.tempo.note_types_per_minute());
 			_left_btn.set_text (string_compose ("%1", buf), true);
 		} else {
-			snprintf (buf, sizeof(buf), "1/%d = %.3f", m.note_type(), m.note_types_per_minute());
+			snprintf (buf, sizeof(buf), "1/%d = %.3f", m.note_type(), m.tempo.note_types_per_minute());
 			_left_btn.set_text (string_compose ("%1: %2", S_("Tempo|T"), buf), true);
 		}
 

@@ -34,8 +34,8 @@ TempoCurve::TempoCurve (PublicEditor& ed, ArdourCanvas::Container& parent, guint
 	, _curve (0)
 	, _shown (false)
 	, _color (rgba)
-	, _min_tempo (p.metric().note_types_per_minute())
-	, _max_tempo (p.metric().note_types_per_minute())
+	, _min_tempo (p.metric().tempo.note_types_per_minute())
+	, _max_tempo (p.metric().tempo.note_types_per_minute())
 	, _point (p)
 	, _start_text (0)
 	, _end_text (0)
@@ -45,12 +45,12 @@ TempoCurve::TempoCurve (PublicEditor& ed, ArdourCanvas::Container& parent, guint
 
 	group = new ArdourCanvas::Container (&parent, ArdourCanvas::Duple (unit_position, 1));
 #ifdef CANVAS_DEBUG
-	group->name = string_compose ("TempoCurve::group for %1", _point.metric().note_types_per_minute());
+	group->name = string_compose ("TempoCurve::group for %1", _point.metric().tempo.note_types_per_minute());
 #endif
 
 	_curve = new ArdourCanvas::FramedCurve (group);
 #ifdef CANVAS_DEBUG
-	_curve->name = string_compose ("TempoCurve::curve for %1", _point.metric().note_types_per_minute());
+	_curve->name = string_compose ("TempoCurve::curve for %1", _point.metric().tempo.note_types_per_minute());
 #endif
 	_curve->set_points_per_segment (3);
 	points = new ArdourCanvas::Points ();
@@ -63,9 +63,9 @@ TempoCurve::TempoCurve (PublicEditor& ed, ArdourCanvas::Container& parent, guint
 	_start_text->set_color (RGBA_TO_UINT (255,255,255,255));
 	_end_text->set_color (RGBA_TO_UINT (255,255,255,255));
 	char buf[10];
-	snprintf (buf, sizeof (buf), "%.3f/%d", _point.metric().note_types_per_minute(), _point.metric().note_type());
+	snprintf (buf, sizeof (buf), "%.3f/%d", _point.metric().tempo.note_types_per_minute(), _point.metric().note_type());
 	_start_text->set (buf);
-	snprintf (buf, sizeof (buf), "%.3f", _point.metric().end_note_types_per_minute());
+	snprintf (buf, sizeof (buf), "%.3f", _point.metric().tempo.end_note_types_per_minute());
 	_end_text->set (buf);
 
 	set_color_rgba (rgba);
@@ -127,14 +127,14 @@ TempoCurve::set_position (samplepos_t sample, samplepos_t end_sample)
 
 	if (sample >= end_sample) {
 		/* shouldn't happen but ..*/
-		const double tempo_at = _point.metric().note_types_per_minute();
+		const double tempo_at = _point.metric().tempo.note_types_per_minute();
 		const double y_pos =  (curve_height) - (((tempo_at - _min_tempo) / (_max_tempo - _min_tempo)) * curve_height);
 
 		points->push_back (ArdourCanvas::Duple (0.0, y_pos));
 		points->push_back (ArdourCanvas::Duple (1.0, y_pos));
 
-	} else if (!_point.metric().ramped()) {
-		const double tempo_at = _point.metric().note_types_per_minute();
+	} else if (!_point.metric().tempo.ramped()) {
+		const double tempo_at = _point.metric().tempo.note_types_per_minute();
 		const double y_pos =  (curve_height) - (((tempo_at - _min_tempo) / (_max_tempo - _min_tempo)) * curve_height);
 
 		points->push_back (ArdourCanvas::Duple (0.0, y_pos));
@@ -162,9 +162,9 @@ TempoCurve::set_position (samplepos_t sample, samplepos_t end_sample)
 	_curve->set (*points);
 
 	char buf[10];
-	snprintf (buf, sizeof (buf), "%.3f/%d", _point.metric().note_types_per_minute(), _point.metric().note_type());
+	snprintf (buf, sizeof (buf), "%.3f/%d", _point.metric().tempo.note_types_per_minute(), _point.metric().note_type());
 	_start_text->set (buf);
-	snprintf (buf, sizeof (buf), "%.3f", _point.metric().end_note_types_per_minute());
+	snprintf (buf, sizeof (buf), "%.3f", _point.metric().tempo.end_note_types_per_minute());
 	_end_text->set (buf);
 
 	_start_text->set_position (ArdourCanvas::Duple (10, .5 ));
