@@ -125,6 +125,7 @@ class LIBTEMPORAL_API Point {
 	BBT_Time const & bbt() const { return _bbt; }
 
 	samplepos_t sample() const;
+	timepos_t time() const;
 
 	struct sclock_comparator {
 		bool operator() (Point const & a, Point const & b) const {
@@ -158,6 +159,10 @@ class LIBTEMPORAL_API Point {
 	TempoMap const * _map;
 
 	void add_state (XMLNode &) const;
+
+  protected:
+	friend class TempoMap;
+	void map_reset_set_sclock_for_sr_change (superclock_t sc) { _sclock = sc; }
 };
 
 /** Tempo, the speed at which musical time progresses (BPM).
@@ -373,11 +378,11 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 */
 class LIBTEMPORAL_API TempoMetric {
   public:
-	TempoMetric (TempoPoint const & t, MeterPoint const & m) : tempo (t), meter (m) {}
+	TempoMetric (TempoPoint & t, MeterPoint & m) : tempo (t), meter (m) {}
 	~TempoMetric () {}
 
-	TempoPoint const & tempo;
-	MeterPoint const & meter;
+	TempoPoint & tempo;
+	MeterPoint & meter;
 
 	/* even more convenient wrappers for individual aspects of a
 	 * TempoMetric (i.e. just tempo or just meter information required
@@ -491,60 +496,24 @@ class LIBTEMPORAL_API MusicTimePoint : public Point
 
  */
 
-class LIBTEMPORAL_API TempoMapPoint : public Point
+class LIBTEMPORAL_API TempoMapPoint : public Point, public TempoMetric
 {
   public:
-	enum Flag {
-		ExplicitTempo =    0x1,
-		ExplicitMeter =    0x2,
-		ExplicitPosition = 0x4,
-	};
-
-	TempoMapPoint (TempoMap & map, Flag f, TempoPoint& t, MeterPoint& m, superclock_t sc, Beats const & q, BBT_Time const & bbt)
-		: Point (map, sc, q, bbt), _flags (f), _tempo (&t), _meter (&m), _floating (false) {}
+	TempoMapPoint (TempoMap & map, TempoMetric const & tm, superclock_t sc, Beats const & q, BBT_Time const & bbt)
+		: Point (map, sc, q, bbt), TempoMetric (tm), _floating (false) {}
 	~TempoMapPoint () {}
-
-	Flag         flags() const { return _flags; }
-	TempoPoint & tempo() const { return *_tempo; }
-	MeterPoint & meter() const { return *_meter; }
 
 	/* called by a GUI that is manipulating the position of this point */
 	void start_float ();
 	void end_float ();
 	bool floating() const { return _floating; }
 
-	bool is_explicit_tempo ()    const { return _flags & ExplicitTempo; }
-	bool is_explicit_meter ()    const { return _flags & ExplicitMeter; }
-	bool is_explicit_position () const { return _flags & ExplicitPosition; }
-	bool is_explicit() const           { return _flags & (ExplicitMeter|ExplicitTempo|ExplicitPosition); }
-	bool is_implicit() const           { return _flags == Flag (0); }
-
-	superclock_t superclocks_per_note_type (int8_t note_type) const {
-		return _tempo->superclocks_per_note_type (note_type);
-	}
-
-	struct BadTempoMetricLookup : public std::exception {
-		virtual const char* what() const throw() { return "cannot obtain non-const Metric from implicit map point"; }
-	};
-
-	timepos_t           time() const;
-
-	superclock_t  walk_to_superclock (superclock_t start, Beats const & distance) const;
-	Beats walk_to_quarters (superclock_t start, superclock_t distance) const;
-
-	TempoPoint & nonconst_tempo() const { return *_tempo; }
-	MeterPoint & nonconst_meter() const { return *_meter; }
-
-	TempoMetric metric() const { return TempoMetric (tempo(), meter()); }
-
-  protected:
-	friend class TempoMap;
-	void map_reset_set_sclock_for_sr_change (superclock_t sc) { _sclock = sc; }
+	bool is_explicit_meter() const { return meter.sclock() == sclock(); }
+	bool is_explicit_tempo() const { return tempo.sclock() == sclock(); }
+	bool is_explicit_position() const { return false; }
+	bool is_explicit () const { return is_explicit_meter() || is_explicit_tempo() || is_explicit_position(); }
 
   private:
-	Flag         _flags;
-	TempoPoint * _tempo;
-	MeterPoint * _meter;
 	bool         _floating;
 };
 
@@ -582,11 +551,11 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	bool move_tempo (TempoPoint const & point, timepos_t const & destination, bool push = false);
 	bool move_meter (MeterPoint const & point, timepos_t const & destination, bool push = false);
 
-	bool can_remove (Tempo const &) const;
-	bool can_remove (Meter const &) const;
+	bool can_remove (TempoPoint const &) const;
+	bool can_remove (MeterPoint const &) const;
 
-	bool is_initial (Tempo const &) const;
-	bool is_initial (Meter const &) const;
+	bool is_initial (TempoPoint const &) const;
+	bool is_initial (MeterPoint const &) const;
 
 	uint32_t n_meters() const;
 	uint32_t n_tempos() const;
@@ -669,11 +638,6 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 
 	void get_grid (TempoMapPoints& points, samplepos_t start, samplepos_t end, Beats const & resolution);
 	void get_bar_grid (TempoMapPoints& points, samplepos_t start, samplepos_t end, int32_t bar_gap);
-
-	/* returns all points with ExplicitMeter and/or ExplicitTempo */
-	void get_points (TempoMapPoints& points) const;
-	void get_tempos (TempoMapPoints& points) const;
-	void get_meters (TempoMapPoints& points) const;
 
 	template<class T> void apply_with_points (T& obj, void (T::*method)(TempoMapPoints &)) {
 		Glib::Threads::RWLock::ReaderLock lm (_lock);
