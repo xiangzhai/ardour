@@ -405,7 +405,7 @@ private:
 	 */
 
 	friend class Evoral::Sequence<Beats>;
-	Beats (double beats) {
+	explicit Beats (double beats) {
 		double       whole;
 		const double frac = modf (beats, &whole);
 

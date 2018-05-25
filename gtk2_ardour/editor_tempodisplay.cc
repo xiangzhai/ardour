@@ -103,8 +103,6 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 
 			snprintf (buf, sizeof(buf), "%d/%d", i->divisions_per_bar(), i->note_value ());
 
-			cerr << "NEW METER MARKER using " << buf << endl;
-
 			if (i->map().time_domain() != Temporal::AudioTime) {
 				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker music"), buf, i->meter));
 			} else {
@@ -343,28 +341,28 @@ Editor::compute_current_bbt_points (Temporal::TempoMapPoints& grid, samplepos_t 
 	case bbt_show_ticks:
 	case bbt_show_ticks_detail:
 	case bbt_show_ticks_super_detail:
-		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, Temporal::Beats (1, 0));
+		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, 0);
 		break;
 
 	case bbt_show_1:
-		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, Temporal::Beats (1, 0));
+		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, 1);
 		break;
 
 	case bbt_show_4:
-		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, Temporal::Beats (4, 0));
+		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, 4);
 		break;
 
 	case bbt_show_16:
-		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, Temporal::Beats (16, 0));
+		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, 16);
 		break;
 
 	case bbt_show_64:
-		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, Temporal::Beats (64, 0));
+		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, 64);
 		break;
 
 	default:
 		/* bbt_show_many */
-		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, Temporal::Beats (128, 0));
+		_session->tempo_map().get_grid (grid, max (samplepos_t (0), leftmost), rightmost, 128);
 		break;
 	}
 }

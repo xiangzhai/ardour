@@ -413,7 +413,7 @@ class LIBTEMPORAL_API TempoMetric {
 		return superclocks_per_grid (sr) * meter.divisions_per_bar();
 	}
 	superclock_t superclocks_per_grid (samplecnt_t sr) const {
-		return (superclock_ticks_per_second * meter.note_value()) / (tempo.note_types_per_minute() / tempo.note_type());
+		return llrint (tempo.superclocks_per_note_type() * ((double) tempo.note_type() / meter.note_value()));
 	}
 
 	superclock_t superclock_per_note_type_at_superclock (superclock_t sc) const {
@@ -625,19 +625,7 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	TimeDomain time_domain() const { return _time_domain; }
 	void set_time_domain (TimeDomain td);
 
-	/* If resolution == Beats() (i.e. zero), then the grid that is
-	   returned will contain a mixture of implicit and explicit points,
-	   and will only be valid as long as this map remains unchanged
-	   (because the implicit points may reference explicit points in the
-	   map.
-
-	   If resolution != Beats() (i.e. non-zero), then the in-out @param
-	   grid will contain only explicit points that do not reference this
-	   map in anyway.
-	*/
-
-	void get_grid (TempoMapPoints& points, samplepos_t start, samplepos_t end, Beats const & resolution);
-	void get_bar_grid (TempoMapPoints& points, samplepos_t start, samplepos_t end, int32_t bar_gap);
+	void get_grid (TempoMapPoints& points, samplepos_t start, samplepos_t end, uint32_t bar_mod);
 
 	template<class T> void apply_with_points (T& obj, void (T::*method)(TempoMapPoints &)) {
 		Glib::Threads::RWLock::ReaderLock lm (_lock);
@@ -728,6 +716,8 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 
 	void solve (superclock_t sc, Beats & beats, BBT_Time & bbt) const;
 	void solve (Beats const & beats, superclock_t & sc, BBT_Time & bbt) const;
+
+	void extend_locked (superclock_t limit);
 };
 
 } /* end of namespace Temporal */

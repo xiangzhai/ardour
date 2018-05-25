@@ -185,18 +185,26 @@ Meter::bbt_add (Temporal::BBT_Time const & bbt, Temporal::BBT_Offset const & add
 
 	Temporal::BBT_Offset r (bars + add.bars, beats + add.beats, ticks + add.ticks);
 
-	if (r.ticks >= Temporal::Beats::PPQN) {
-		r.beats += r.ticks / Temporal::Beats::PPQN;
-		r.ticks %= Temporal::Beats::PPQN;
+	/* ticks-per-bar-division; PPQN is ticks-per-quarter note */
+
+	const int32_t ppbd = (Temporal::Beats::PPQN * 4) / _note_value;
+
+	if (r.ticks >= ppbd) {
+		r.beats += r.ticks / ppbd;
+		r.ticks %= ppbd;
 	}
 
 	if (r.beats > _divisions_per_bar) {
-		r.bars += r.beats / _divisions_per_bar;
-		r.beats %= _divisions_per_bar;
-	}
 
-	if (r.beats == 0) {
-		r.beats = 1;
+		/* adjust to zero-based math, since that's what C++ operators expect */
+
+		r.beats -= 1;
+		r.bars += r.beats / _divisions_per_bar;
+		r.beats = r.beats % _divisions_per_bar;
+
+		/* adjust back */
+
+		r.beats += 1;
 	}
 
 	if (r.bars == 0) {
@@ -239,18 +247,23 @@ Meter::bbt_subtract (Temporal::BBT_Time const & bbt, Temporal::BBT_Offset const 
 
 	Temporal::BBT_Offset r (bars - sub.bars, beats - sub.beats, ticks - sub.ticks);
 
+	/* ticks-per-bar-division; PPQN is ticks-per-quarter note */
+
+	const int32_t ppbd = (Temporal::Beats::PPQN * 4) / _note_value;
+
 	if (r.ticks < 0) {
-		r.beats -= 1 - (r.ticks / Temporal::Beats::PPQN);
-		r.ticks = Temporal::Beats::PPQN + (r.ticks % Temporal::Beats::PPQN);
+		r.beats -= (r.ticks / ppbd);
+		r.ticks = ppbd + (r.ticks % Temporal::Beats::PPQN);
 	}
 
-	if (r.beats <= 0) {
-		r.bars -= 1 - (r.beats / _divisions_per_bar);
-		r.beats = _divisions_per_bar + (r.beats % _divisions_per_bar);
-	}
+	if (r.beats < 0) {
 
-	if (r.beats == 0) {
-		r.beats = 1;
+		r.beats += 1;
+
+		r.bars -= r.beats / _divisions_per_bar;
+		r.beats = r.beats % _divisions_per_bar;
+
+		r.beats -= 1;
 	}
 
 	if (r.bars <= 0) {
@@ -505,9 +518,7 @@ MeterPoint::get_state () const
 Temporal::BBT_Time
 TempoMetric::bbt_at (superclock_t sc) const
 {
-	cerr << "sc diff between " << meter.sclock() << " and " << sc << " = " << sc - meter.sclock();
-	cerr << " ticks " << (sc - meter.sclock()) / superclocks_per_ppqn() << endl;
-	return meter.bbt_add (meter.bbt(), Temporal::BBT_Offset (0, 0,  (sc - meter.sclock()) / superclocks_per_ppqn()));
+	return meter.bbt_add (meter.bbt(), Temporal::BBT_Offset (0, 0, (sc - meter.sclock()) / superclocks_per_ppqn()));
 }
 
 superclock_t
@@ -896,6 +907,7 @@ TempoMap::rebuild (superclock_t limit)
 	}
 
 	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("explicit tempo map contains %1 points\n", _points.size()));
+	dump_locked (cerr);
 
 	/* now fill in all the implicit points until the next explicit one */
 
@@ -917,13 +929,16 @@ TempoMap::rebuild (superclock_t limit)
 		superclock_t superclock_step = p->superclocks_per_note_type ();
 		superclock_t sc = p->sclock();
 
-		sc += superclock_step;
-
 		BBT_Time bbt (p->bbt());
 
-		while ((nxt != _points.end() && sc < nxt->sclock()) || sc < limit) {
+		while (nxt != _points.end() || sc < limit) {
 
 			sc += superclock_step;
+
+			if (sc >= nxt->sclock()) {
+				break;
+			}
+
 			Beats beats = p->quarters_at (sc);
 			bbt = p->bbt_add (bbt, Temporal::BBT_Offset (0, 1, 0));
 
@@ -956,7 +971,12 @@ void
 TempoMap::extend (superclock_t limit)
 {
 	TraceableWriterLock lm (_lock);
+	extend_locked (limit);
+}
 
+void
+TempoMap::extend_locked (superclock_t limit)
+{
 	if (_points.back().sclock() >= limit) {
 		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("extension skipped, map already extends to %1 beyond %2\n", _points.back().sclock(), limit));
 		return;
@@ -1700,7 +1720,19 @@ void
 TempoMap::set_sample_rate (samplecnt_t new_sr)
 {
 	TraceableWriterLock lm (_lock);
-	double ratio = new_sr / (double) _sample_rate;
+	const double ratio = new_sr / (double) _sample_rate;
+
+	for (Tempos::iterator t = _tempos.begin(); t != _tempos.end(); ++t) {
+		t->map_reset_set_sclock_for_sr_change (llrint (ratio * t->sclock()));
+	}
+
+	for (Meters::iterator m = _meters.begin(); m != _meters.end(); ++m) {
+		m->map_reset_set_sclock_for_sr_change (llrint (ratio * m->sclock()));
+	}
+
+	for (MusicTimes::iterator p = _bartimes.begin(); p != _bartimes.end(); ++p) {
+		p->map_reset_set_sclock_for_sr_change (llrint (ratio * p->sclock()));
+	}
 
 	for (TempoMapPoints::iterator i = _points.begin(); i != _points.end(); ++i) {
 		i->map_reset_set_sclock_for_sr_change (llrint (ratio * i->sclock()));
@@ -1736,68 +1768,98 @@ TempoMap::dump_fundamental (std::ostream& ostr) const
 }
 
 void
-TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, Temporal::Beats const & resolution)
+TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, uint32_t bar_mod)
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 
+	DEBUG_TRACE (DEBUG::TemporalMap, ">>> GRID START\n");
+
 	superclock_t start = S2Sc (s);
 	superclock_t end = S2Sc (e);
+	superclock_t pos = start;
 
-	TempoMapPoints::iterator p = iterator_at (start);
+	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("get grid between %1..%2 at bar_mod = %3; current end: %4\n",start, end, bar_mod, _points.back().sclock()));
 
-	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("get grid between %1..%2 at resolution = %3; current end: %4\n",start, end, resolution, _points.back().sclock()));
+	if (bar_mod == 0) {
 
-	/* extend as necessary to fill out to e */
+		/* round down to bar start */
+		BBT_Time bbt = metric_at_locked (start).bbt_at (start).round_down_to_bar ();
+		cerr << "natural start is " << metric_at_locked (start).bbt_at (start) << " rounded to " << bbt << endl;
+		pos = metric_at_locked (bbt).superclock_at (bbt);
 
-	if (e > _points.back().sample()) {
-		/* need to drop reader lock while we rebuild since that
-		   requires the writer lock.
-		*/
-		lm.release ();
-		extend (end);
-		lm.acquire ();
-	}
+		/* get "natural" grid from tempo map */
 
-	/* advance to the first point at or later than start (since by
-	 * definition, p may point at the point before start.
-	 */
+		do {
+			TempoMetric metric (metric_at_locked (pos));
 
-	while (p != _points.end() && p->sclock() < start) {
-		++p;
-	}
-
-	Temporal::Beats prev_beats;
-
-	while ((p != _points.end()) && (p->sclock() < end)) {
-
-		if (prev_beats) {
-			if ((p->beats() - prev_beats) >= resolution) {
-				ret.push_back (*p); /* makes a copy */
+			if (pos >= end) {
+				break;
 			}
-		} else {
-			ret.push_back (*p);
+
+			const Temporal::Beats beats = metric.quarters_at (pos);
+			const BBT_Time bbt = metric.bbt_at (pos);
+
+			ret.push_back (TempoMapPoint (*this, metric, pos, beats, bbt));
+
+			/* Advance by the meter note value size */
+
+			pos += metric.superclocks_per_grid (_sample_rate);
+
+		} while (true);
+
+	} else {
+		/* get a grid in which each element is bar_mod bars apart.
+		 *
+		 * e.g. if bar_mod is 2, and the start is at zero, the grid
+		 * looks like:
+		 *
+		 * 1|1|0 , 3|1|0, 5|1|0 ...
+		 *
+		 * if bar_mod is 16, it would look like:
+		 *
+		 * 1|1|0, 17|1|0, 33|1|0
+		 */
+
+		/* get the precise BBT time at the start */
+
+
+		BBT_Time bbt = metric_at_locked (start).bbt_at (start);
+
+		/* round down to bar start */
+
+		bbt = bbt.round_down_to_bar ();
+
+		/* adjust so that first bar fits the bar multiple given by
+		 * bar_mod
+		 */
+
+		if (bar_mod != 1) {
+			bbt.bars -= bbt.bars % bar_mod;
+			++bbt.bars;
 		}
 
-		prev_beats = p->beats ();
-		++p;
+		/* recompute starting point with the new, rounded BBT */
+
+		do {
+			TempoMetric metric (metric_at_locked (bbt));
+			pos = metric.superclock_at (bbt);
+
+			if (pos < 0 || pos >= end) {
+				break;
+			}
+
+			const Beats beats = metric.quarters_at (bbt);
+
+			ret.push_back (TempoMapPoint (*this, metric, pos, beats, bbt));
+
+			/* shift by requested number of bars */
+
+			bbt.bars += bar_mod;
+
+		} while (true);
 	}
-}
 
-
-void
-TempoMap::get_bar_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, int32_t bar_gap)
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-
-	superclock_t start = S2Sc (s);
-	superclock_t end = S2Sc (e);
-
-	for (TempoMapPoints::iterator p = iterator_at (start); (p != _points.end()) && (p->sclock() < end); ++p) {
-
-		if ((p->sclock() >= start) && (p->bbt().beats == 1) && ((p->bbt().bars == 1) || (p->bbt().bars % bar_gap == 0))) {
-			ret.push_back (TempoMapPoint (*this, TempoMetric (p->tempo, p->meter), p->sclock(), p->beats(), p->bbt()));
-		}
-	}
+	DEBUG_TRACE (DEBUG::TemporalMap, "<<< GRID DONE\n");
 }
 
 std::ostream&
@@ -1839,7 +1901,7 @@ std::operator<<(std::ostream& str, TempoMetric const & tm)
 std::ostream&
 std::operator<<(std::ostream& str, TempoMapPoint const & tmp)
 {
-	str << '@' << std::setw (12) << tmp.sclock() << ' ' << tmp.sclock() / (double) superclock_ticks_per_second
+	str << '@' << std::setw (12) << tmp.sample() << ' ' << tmp.sclock() / (double) superclock_ticks_per_second
 	    << (tmp.is_explicit_tempo() ? " EXP-T" : " imp-t")
 	    << (tmp.is_explicit_meter() ? " EXP-M" : " imp-m")
 	    << (tmp.is_explicit_position() ? " EXP-P" : " imp-p")
@@ -2522,7 +2584,15 @@ TempoMap::metric_at_locked (superclock_t sc) const
 	for (t = _tempos.begin(), prev_t = t; t != _tempos.end() && t->sclock() < sc; ++t) { prev_t = t; }
 	for (m = _meters.begin(), prev_m = m; m != _meters.end() && m->sclock() < sc; ++m) { prev_m = m; }
 
-	cerr << "Looked for metric at sc=" << sc << " found " << *prev_t << " and " << *prev_m << endl;
+	/* may have found tempo and/or meter precisely at @param sc */
+
+	if (t != _tempos.end() && t->sclock() == sc) {
+		prev_t = t;
+	}
+
+	if (m != _meters.end() && m->sclock() == sc) {
+		prev_m = m;
+	}
 
 	/* I hate doing this const_cast<>, but making this method non-const
 	 * propagates into everything that just calls metric_at(), and that's a
@@ -2550,6 +2620,16 @@ TempoMap::metric_at_locked (Beats const & b) const
 	for (t = _tempos.begin(), prev_t = t; t != _tempos.end() && t->beats() < b; ++t) { prev_t = t; }
 	for (m = _meters.begin(), prev_m = m; m != _meters.end() && m->beats() < b; ++m) { prev_m = m; }
 
+	/* may have found tempo and/or meter precisely at @param b */
+
+	if (t != _tempos.end() && t->beats() == b) {
+		prev_t = t;
+	}
+
+	if (m != _meters.end() && m->beats() == b) {
+		prev_m = m;
+	}
+
 	/* I hate doing this const_cast<>, but making this method non-const
 	 * propagates into everything that just calls metric_at(), and that's a
 	 * bit ridiculous. Yes, the TempoMetric returned here can be used to
@@ -2575,6 +2655,16 @@ TempoMap::metric_at_locked (BBT_Time const & bbt) const
 
 	for (t = _tempos.begin(), prev_t = t; t != _tempos.end() && t->bbt() < bbt; ++t) { prev_t = t; }
 	for (m = _meters.begin(), prev_m = m; m != _meters.end() && m->bbt() < bbt; ++m) { prev_m = m; }
+
+	/* may have found tempo and/or meter precisely at @param bbt */
+
+	if (t != _tempos.end() && t->bbt() == bbt) {
+		prev_t = t;
+	}
+
+	if (m != _meters.end() && m->bbt() == bbt) {
+		prev_m = m;
+	}
 
 	/* I hate doing this const_cast<>, but making this method non-const
 	 * propagates into everything that just calls metric_at(), and that's a
