@@ -92,7 +92,7 @@ class LIBTEMPORAL_API timepos_t {
 	timepos_t increment () const {
 		switch (_lock_status.style()) {
 		case Temporal::BeatTime:
-			return timepos_t (_beats + Beats (1));
+			return timepos_t (_beats + Beats (0, 1));
 		case Temporal::AudioTime:
 			return timepos_t (_samplepos < max_samplepos ? _samplepos + 1 : _samplepos);
 		default:
@@ -109,7 +109,7 @@ class LIBTEMPORAL_API timepos_t {
 	timepos_t decrement () const {
 		switch (_lock_status.style()) {
 		case Temporal::BeatTime:
-			return timepos_t (_beats - Beats (1)); /* beats can go negative */
+			return timepos_t (_beats - Beats (0, 1)); /* beats can go negative */
 		case Temporal::AudioTime:
 			return timepos_t (_samplepos > 0 ? _samplepos - 1 : _samplepos); /* samples cannot go negative */
 		default:

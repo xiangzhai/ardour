@@ -82,7 +82,7 @@ TempoLines::draw_ticks (TempoMapPoints& grid,
 		const uint8_t    a = max(8, (int)rint(UINT_RGBA_A(base) / (0.8 * log2(level))));
 		const uint32_t   c = UINT_RGBA_CHANGE_A(base, a);
 
-		const timepos_t beat_pos = timepos_t (grid.front().quarters() + Beats (l / (double) divisions));
+		const timepos_t beat_pos = timepos_t (grid.front().beats() + Beats::from_double (l / (double) divisions));
 		const samplepos_t f = beat_pos.sample ();
 
 		if (f > leftmost_sample) {

@@ -171,7 +171,7 @@ Quantize::operator () (boost::shared_ptr<MidiModel> model,
 					Temporal::Beats new_dur (new_end - new_start);
 
 					if (!new_dur) {
-						new_dur = Temporal::Beats (_end_grid);
+						new_dur = Temporal::Beats::from_double (_end_grid);
 					}
 
 					cmd->change ((*i), MidiModel::NoteDiffCommand::Length, new_dur);

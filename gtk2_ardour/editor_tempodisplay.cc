@@ -107,7 +107,7 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 
 			cerr << "NEW METER MARKER using " << buf << endl;
 
-			if (i->map()->time_domain() != Temporal::AudioTime) {
+			if (i->map().time_domain() != Temporal::AudioTime) {
 				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker music"), buf, i->meter()));
 			} else {
 				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker"), buf, i->meter()));
@@ -122,10 +122,10 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 			min_tempo = min (min_tempo, metric.tempo.end_note_types_per_minute());
 			uint32_t const tc_color = UIConfiguration::instance().color ("tempo curve");
 
-			tempo_curves.push_back (new TempoCurve (*this, *tempo_group, tc_color, *i, i->sample(), false));
+			tempo_curves.push_back (new TempoCurve (*this, *tempo_group, tc_color, i->tempo(), i->sample(), false));
 
 			const std::string tname (X_(""));
-			if (i->map()->time_domain() != Temporal::AudioTime) {
+			if (i->map().time_domain() != Temporal::AudioTime) {
 				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker music"), tname, i->tempo()));
 			} else {
 				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker"), tname, i->tempo()));
@@ -162,7 +162,7 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 			(*x)->set_position ((*x)->point().sample(), UINT32_MAX);
 		}
 
-		if (!(*x)->point().metric().tempo.active()) {
+		if (!(*x)->point().active()) {
 			(*x)->hide();
 		} else {
 			(*x)->show();
@@ -263,7 +263,7 @@ Editor::tempo_map_changed (samplepos_t, samplepos_t)
 			(*x)->set_position ((*x)->point().sample(), UINT32_MAX);
 		}
 
-		if (!(*x)->point().metric().tempo.active()) {
+		if (!(*x)->point().active()) {
 			(*x)->hide();
 		} else {
 			(*x)->show();
@@ -315,14 +315,10 @@ Editor::redisplay_tempo (bool immediate_redraw)
 	}
 }
 void
-Editor::tempo_curve_selected (TempoMapPoint const * p, bool yn)
+Editor::tempo_curve_selected (TempoPoint const & p, bool yn)
 {
-	if (p == 0) {
-		return;
-	}
-
 	for (Curves::iterator x = tempo_curves.begin(); x != tempo_curves.end(); ++x) {
-		if (&(*x)->point() == p) {
+		if ((*x)->point() == p) {
 			if (yn) {
 				(*x)->set_color_rgba (UIConfiguration::instance().color ("location marker"));
 			} else {

@@ -4148,7 +4148,7 @@ Editor::get_grid_type_as_beats (bool& success, timepos_t const & position) const
 	case SnapToBar:
 		if (_session) {
 			const Meter& m = _session->tempo_map().meter_at (position);
-			return Beats ((4.0 * m.divisions_per_bar()) / m.note_value());
+			return Beats::from_double ((4.0 * m.divisions_per_bar()) / m.note_value());
 		}
 		break;
 	default:

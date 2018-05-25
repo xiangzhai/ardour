@@ -94,7 +94,7 @@ public:
 			                                std::min(value, (double)INT64_MAX)));
 			break;
 		case BEATS:
-			_beats = Temporal::Beats(value);
+			_beats = Temporal::Beats::from_double (value);
 			break;
 		default:
 			_type = NOTHING;

@@ -335,14 +335,6 @@ class LIBARDOUR_API TempoMap
 	superclock_t superclock_at (Temporal::Beats const &) const;
 	superclock_t superclock_at (Temporal::BBT_Time const &) const;
 
-	TempoMapPoint const & const_point_at (superclock_t sc) const { return *const_iterator_at (sc); }
-	TempoMapPoint const & const_point_at (Temporal::Beats const & b) const { return *const_iterator_at (b); }
-	TempoMapPoint const & const_point_at (Temporal::BBT_Time const & bbt) const { return *const_iterator_at (bbt); }
-
-	TempoMapPoint const & const_point_after (superclock_t sc) const;
-	TempoMapPoint const & const_point_after (Temporal::Beats const & b) const;
-	TempoMapPoint const & const_point_after (Temporal::BBT_Time const & bbt) const;
-
 	/* If resolution == Temporal::Beats() (i.e. zero), then the grid that is
 	   returned will contain a mixture of implicit and explicit points,
 	   and will only be valid as long as this map remains unchanged

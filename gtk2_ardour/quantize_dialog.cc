@@ -187,6 +187,5 @@ QuantizeDialog::strength () const
 Temporal::Beats
 QuantizeDialog::threshold () const
 {
-	/* explicit use of from-double Beats constructor */
-	return Temporal::Beats (threshold_adjustment.get_value ());
+	return Temporal::Beats::from_double (threshold_adjustment.get_value ());
 }

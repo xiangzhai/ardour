@@ -3472,7 +3472,6 @@ TempoMarkerDrag::TempoMarkerDrag (Editor* e, ArdourCanvas::Item* i, bool c)
 	, _marker (reinterpret_cast<TempoMarker*> (_item->get_data ("marker")))
 	, _copy (c)
 	, _grab_bpm (120.0, 4.0)
-	, _grab_qn (0.0)
 	, _before_state (0)
 {
 	DEBUG_TRACE (DEBUG::Drags, "New TempoMarkerDrag\n");
@@ -3923,7 +3922,6 @@ TempoTwistDrag::aborted (bool moved)
 
 TempoEndDrag::TempoEndDrag (Editor* e, ArdourCanvas::Item* i)
 	: Drag (e, i)
-	, _grab_qn (0.0)
 	, _point (0)
 	, _before_state (0)
 	, _drag_valid (true)
@@ -3949,15 +3947,15 @@ TempoEndDrag::start_grab (GdkEvent* event, Gdk::Cursor* cursor)
 
 	ostringstream sstr;
 
-	TempoMapPoint const * prev = tmap.previous_tempo (*_point);
+	TempoPoint const * prev = tmap.previous_tempo (_point->metric().tempo);
 
 	if (prev != 0) {
-		_editor->tempo_curve_selected (prev, true);
+		_editor->tempo_curve_selected (*prev, true);
 		sstr << "end: " << fixed << setprecision(3) << _point->metric().tempo.end_note_types_per_minute() << "\n";
 	}
 
 	if (_point->metric().tempo.clamped()) {
-		_editor->tempo_curve_selected (_point, true);
+		_editor->tempo_curve_selected (_point->metric().tempo, true);
 		sstr << "start: " << fixed << setprecision(3) << _point->metric().tempo.note_types_per_minute();
 	}
 
@@ -4014,14 +4012,14 @@ TempoEndDrag::finished (GdkEvent* event, bool movement_occurred)
 	_editor->session()->add_command(new MementoCommand<TempoMap>(tmap, _before_state, &after));
 	_editor->commit_reversible_command ();
 
-	TempoMapPoint const * prev = tmap.previous_tempo (*_point);
+	TempoPoint const * prev = tmap.previous_tempo (_point->metric().tempo);
 
 	if (prev != 0) {
-		_editor->tempo_curve_selected (prev, false);
+		_editor->tempo_curve_selected (*prev, false);
 	}
 
 	if (_point->metric().tempo.clamped()) {
-		_editor->tempo_curve_selected (_point, false);
+		_editor->tempo_curve_selected (_point->metric().tempo, false);
 
 	}
 }
@@ -6123,7 +6121,6 @@ RangeMarkerBarDrag::update_item (Location* location)
 
 NoteDrag::NoteDrag (Editor* e, ArdourCanvas::Item* i)
 	: Drag (e, i)
-	, _cumulative_dx (0)
 	, _cumulative_dy (0)
 	, _was_selected (false)
 	, _copy (false)
@@ -6796,7 +6793,7 @@ NoteCreateDrag::finished (GdkEvent* ev, bool had_movement)
 
 	/* we create a note even if there was no movement */
 	Beats const start = min (_note[0], _note[1]);
-	Beats length = max (Beats (1), (_note[0] - _note[1]).abs());
+	Beats length = max (Beats (1, 0), (_note[0] - _note[1]).abs());
 
 	int32_t div = _editor->get_grid_music_divisions (ev->button.state);
 

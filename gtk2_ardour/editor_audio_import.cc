@@ -292,7 +292,7 @@ Editor::import_smf_tempo_map (Evoral::SMF const & smf, timepos_t const & pos)
 		Temporal::BBT_Time bbt; /* 1|1|0 which is correct for the no-meter case */
 
 		if (have_initial_meter) {
-			Temporal::Beats beats ((t->time_pulses / smf.ppqn()) / 4.0);
+			Temporal::Beats beats (Temporal::Beats::from_double ((t->time_pulses / smf.ppqn()) / 4.0));
 
 			new_map.set_tempo (tempo, timepos_t (new_map.sample_at (beats)));
 			if (!(meter == last_meter)) {

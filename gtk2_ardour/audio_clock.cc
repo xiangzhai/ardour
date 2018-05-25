@@ -1219,7 +1219,7 @@ AudioClock::set_bbt (samplepos_t when, samplecnt_t offset, bool /*force*/)
 				offset = bbt_reference_time;
 			}
 
-			const double divisions = tmap.const_point_at(offset).metric().divisions_per_bar();
+			const double divisions = tmap.metric_at(offset).divisions_per_bar();
 			Temporal::BBT_Time sub_bbt;
 
 			if (negative) {

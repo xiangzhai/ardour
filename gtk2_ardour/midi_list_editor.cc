@@ -207,9 +207,9 @@ MidiListEditor::scroll_event (GdkEventScroll* ev)
 	switch (colnum) {
 	case 0:
 		if (Keyboard::modifier_state_equals (ev->state, Keyboard::SecondaryModifier)) {
-			delta = Temporal::Beats (1/64.0);
+			delta = Temporal::Beats::from_double (1/64.0);
 		} else {
-			delta = Temporal::Beats (1/4.0);
+			delta = Temporal::Beats::from_double (1/4.0);
 		}
 		if (ev->direction == GDK_SCROLL_DOWN || ev->direction == GDK_SCROLL_LEFT) {
 			delta = -delta;
@@ -250,9 +250,9 @@ MidiListEditor::scroll_event (GdkEventScroll* ev)
 
 	case 5:
 		if (Keyboard::modifier_state_equals (ev->state, Keyboard::SecondaryModifier)) {
-			delta = Temporal::Beats (1/64.0);
+			delta = Temporal::Beats::from_double (1/64.0);
 		} else {
-			delta = Temporal::Beats (1/4.0);
+			delta = Temporal::Beats::from_double (1/4.0);
 		}
 		if (ev->direction == GDK_SCROLL_DOWN || ev->direction == GDK_SCROLL_LEFT) {
 			delta = -delta;
@@ -641,7 +641,7 @@ MidiListEditor::edited (const std::string& path, const std::string& text)
 				val = Temporal::Beats::ticks (Temporal::ticks_per_beat);
 			} else {
 				/* non-integral => beats, so use as-is */
-				val = Temporal::Beats (possible_float);
+				val = Temporal::Beats::from_double (possible_float);
 			}
 
 		} else {

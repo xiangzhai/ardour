@@ -59,7 +59,7 @@ _rest_event_handler (GtkWidget* /*widget*/, gpointer arg)
 
 StepEntry::StepEntry (StepEditor& seditor)
 	: ArdourWindow (string_compose (_("Step Entry: %1"), seditor.name()))
-	, _current_note_length (1.0)
+	, _current_note_length (1, 0)
 	, _current_note_velocity (64)
 	, triplet_button ("3")
 	, dot_adjustment (0.0, 0.0, 3.0, 1.0, 1.0)
@@ -543,7 +543,7 @@ StepEntry::note_length ()
 		base_time *= 1 + ((dots - 1.0)/dots);
 	}
 
-	return Temporal::Beats(base_time);
+	return Temporal::Beats::from_double (base_time);
 }
 
 uint8_t

@@ -35,6 +35,7 @@
 #include "temporal/types.h"
 
 namespace ARDOUR { class Variant; }
+namespace Evoral { template<typename T> class Sequence; }
 
 namespace Temporal {
 
@@ -78,13 +79,12 @@ public:
 		normalize();
 	}
 
-	/** Create from a real number of beats. */
-	explicit Beats(double time) {
+	/** Create from a real (double) number of beats. */
+	static Beats from_double (double beats) {
 		double       whole;
-		const double frac = modf(time, &whole);
+		const double frac = modf (beats, &whole);
 
-		_beats = whole;
-		_ticks = frac * PPQN;
+		return Beats (whole, frac * PPQN);
 	}
 
 	/** Create from an integer number of beats. */
@@ -245,7 +245,7 @@ public:
 
 	Beats snap_to (Temporal::Beats const & snap) const {
 		const double snap_time = snap.to_double();
-		return Beats(ceil(to_double() / snap_time) * snap_time);
+		return Beats::from_double (ceil(to_double() / snap_time) * snap_time);
 	}
 
 	Beats abs () const {
@@ -322,11 +322,11 @@ public:
 	}
 
 	Beats operator+(double d) const {
-		return Beats(to_double() + d);
+		return Beats::from_double (to_double() + d);
 	}
 
 	Beats operator-(double d) const {
-		return Beats(to_double() - d);
+		return Beats::from_double (to_double() - d);
 	}
 
 	Beats operator+(int b) const {
@@ -399,6 +399,19 @@ private:
 	friend class ARDOUR::Variant;
 
 	double to_double() const { return (double)_beats + (_ticks / (double)PPQN); }
+
+	/* this needs to exist because Evoral::Sequence is templated, and some
+	 * other possible template types cannot provide ::from_double
+	 */
+
+	friend class Evoral::Sequence<Beats>;
+	Beats (double beats) {
+		double       whole;
+		const double frac = modf (beats, &whole);
+
+		_beats = whole;
+		_ticks = frac * PPQN;
+	}
 };
 
 /*

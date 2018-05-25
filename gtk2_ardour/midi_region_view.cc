@@ -105,8 +105,8 @@ MidiRegionView::MidiRegionView (ArdourCanvas::Container*      parent,
 	, _note_diff_command (0)
 	, _ghost_note(0)
 	, _step_edit_cursor (0)
-	, _step_edit_cursor_width (1.0)
-	, _step_edit_cursor_position (0.0)
+	, _step_edit_cursor_width (1,0)
+	, _step_edit_cursor_position (0, 0)
 	, _channel_selection_scoped_note (0)
 	, _mouse_state(None)
 	, _pressed_button(0)
@@ -148,8 +148,8 @@ MidiRegionView::MidiRegionView (ArdourCanvas::Container*      parent,
 	, _note_diff_command (0)
 	, _ghost_note(0)
 	, _step_edit_cursor (0)
-	, _step_edit_cursor_width (1.0)
-	, _step_edit_cursor_position (0.0)
+	, _step_edit_cursor_width (1,0)
+	, _step_edit_cursor_position (0,0)
 	, _channel_selection_scoped_note (0)
 	, _mouse_state(None)
 	, _pressed_button(0)
@@ -198,8 +198,8 @@ MidiRegionView::MidiRegionView (const MidiRegionView& other)
 	, _note_diff_command (0)
 	, _ghost_note(0)
 	, _step_edit_cursor (0)
-	, _step_edit_cursor_width (1.0)
-	, _step_edit_cursor_position (0.0)
+	, _step_edit_cursor_width (1, 0)
+	, _step_edit_cursor_position (0,0)
 	, _channel_selection_scoped_note (0)
 	, _mouse_state(None)
 	, _pressed_button(0)
@@ -226,8 +226,8 @@ MidiRegionView::MidiRegionView (const MidiRegionView& other, boost::shared_ptr<M
 	, _note_diff_command (0)
 	, _ghost_note(0)
 	, _step_edit_cursor (0)
-	, _step_edit_cursor_width (1.0)
-	, _step_edit_cursor_position (0.0)
+	, _step_edit_cursor_width (1, 0)
+	, _step_edit_cursor_position (0, 0)
 	, _channel_selection_scoped_note (0)
 	, _mouse_state(None)
 	, _pressed_button(0)
@@ -2973,7 +2973,7 @@ MidiRegionView::update_resizing (NoteBase* primary, bool at_front, double delta_
 				}
 			}
 
-			len = std::max(Temporal::Beats(1 / 512.0), len);
+			len = std::max (Temporal::Beats::from_double (1 / 512.0), len);
 
 			char buf[16];
 #warning paul replace this use of Beats::to_double

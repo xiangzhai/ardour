@@ -1169,7 +1169,7 @@ AutomationLine::view_to_model_coord (double x, double& y) const
 		return timepos_t (samplepos_t (x));
 		break;
 	case Temporal::BeatTime:
-		return timepos_t (Beats (x));
+		return timepos_t (Beats::from_double (x));
 		break;
 	default:
 		/*NOTREACHED*/
