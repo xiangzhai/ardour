@@ -280,6 +280,8 @@ class LIBTEMPORAL_API Meter {
 	int divisions_per_bar () const { return _divisions_per_bar; }
 	int note_value() const { return _note_value; }
 
+	int32_t ticks_per_grid () const { return (4 * Beats::PPQN) / _note_value; }
+
 	inline bool operator==(const Meter& other) const { return _divisions_per_bar == other.divisions_per_bar() && _note_value == other.note_value(); }
 	inline bool operator!=(const Meter& other) const { return _divisions_per_bar != other.divisions_per_bar() || _note_value != other.note_value(); }
 

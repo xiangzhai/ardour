@@ -187,11 +187,11 @@ Meter::bbt_add (Temporal::BBT_Time const & bbt, Temporal::BBT_Offset const & add
 
 	/* ticks-per-bar-division; PPQN is ticks-per-quarter note */
 
-	const int32_t ppbd = (Temporal::Beats::PPQN * 4) / _note_value;
+	const int32_t tpg = ticks_per_grid ();
 
-	if (r.ticks >= ppbd) {
-		r.beats += r.ticks / ppbd;
-		r.ticks %= ppbd;
+	if (r.ticks >= tpg) {
+		r.beats += r.ticks / tpg;
+		r.ticks %= tpg;
 	}
 
 	if (r.beats > _divisions_per_bar) {
@@ -249,11 +249,11 @@ Meter::bbt_subtract (Temporal::BBT_Time const & bbt, Temporal::BBT_Offset const 
 
 	/* ticks-per-bar-division; PPQN is ticks-per-quarter note */
 
-	const int32_t ppbd = (Temporal::Beats::PPQN * 4) / _note_value;
+	const int32_t tpg = ticks_per_grid ();
 
 	if (r.ticks < 0) {
-		r.beats -= (r.ticks / ppbd);
-		r.ticks = ppbd + (r.ticks % Temporal::Beats::PPQN);
+		r.beats -= (r.ticks / tpg);
+		r.ticks = tpg + (r.ticks % Temporal::Beats::PPQN);
 	}
 
 	if (r.beats < 0) {
@@ -305,11 +305,11 @@ Meter::to_quarters (Temporal::BBT_Offset const & offset) const
 
 	/* "parts per bar division" */
 
-	const int ppbd = (Beats::PPQN * 4) / _note_value;
+	const int tpg = ticks_per_grid ();
 
-	if (offset.ticks > ppbd) {
-		ticks += Beats::PPQN * offset.ticks / ppbd;
-		ticks += offset.ticks % ppbd;
+	if (offset.ticks > tpg) {
+		ticks += Beats::PPQN * offset.ticks / tpg;
+		ticks += offset.ticks % tpg;
 	} else {
 		ticks += offset.ticks;
 	}
@@ -2102,12 +2102,12 @@ TempoMap::bbt_walk (BBT_Time const & bbt, BBT_Offset const & o) const
 
 	/* normalize possibly too-large ticks count */
 
-	const int32_t ppbd = (Beats::PPQN * 4) / metric.note_value();
+	const int32_t tpg = metric.meter().ticks_per_grid ();
 
-	if (offset.ticks > ppbd) {
+	if (offset.ticks > tpg) {
 		/* normalize */
-		offset.beats += offset.ticks / ppbd;
-		offset.ticks %= ppbd;
+		offset.beats += offset.ticks / tpg;
+		offset.ticks %= tpg;
 	}
 
 	/* add tick count, now guaranteed to be less than 1 grid unit */
