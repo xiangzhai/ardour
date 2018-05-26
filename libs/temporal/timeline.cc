@@ -236,7 +236,7 @@ timecnt_t::operator% (timecnt_t const & d) const
 	case Temporal::AudioTime:
 		return timecnt_t (_samples % d.samples(), _position);
 	case Temporal::BeatTime:
-#warning should operator% support timecnt_t
+		return timecnt_t (_beats % d.beats(), _position);
 	default:
 		break;
 	}
@@ -252,7 +252,7 @@ timecnt_t::operator%= (timecnt_t const & d)
 		_samples %= d.samples();
 		return *this;
 	case Temporal::BeatTime:
-#warning should operator% support timecnt_t
+		_beats %= d.beats ();
 	default:
 		break;
 	}

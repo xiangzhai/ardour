@@ -244,15 +244,6 @@ class LIBTEMPORAL_API timepos_t {
             explicit methods with clear semantics.
 	*/
 
-	/* delta generates a timecnt_t, which may be negative
-
-	   inclusive delta:
-	   if the result is termed r, then this + r = d
-
-	   exclusive delta:
-	   if the result is termed r, then this + r = last position before d
-	*/
-
 	/* computes the distance between this timepos_t and @param p
 	   such that: this + distance = p
 
