@@ -252,7 +252,7 @@ timecnt_t::operator%= (timecnt_t const & d)
 		_samples %= d.samples();
 		return *this;
 	case Temporal::BeatTime:
-		_beats %= d.beats ();
+		_beats = _beats % d.beats ();
 	default:
 		break;
 	}
