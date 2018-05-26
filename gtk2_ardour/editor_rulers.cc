@@ -1138,7 +1138,7 @@ Editor::metric_get_bbt (std::vector<ArdourCanvas::Ruler::Mark>& marks, gdouble l
 
 	compute_current_bbt_points (grid, lower, upper);
 
-	if (distance (grid.begin(), grid.end()) == 0) {
+	if (grid.empty()) {
 		return;
 	}
 
@@ -1156,23 +1156,18 @@ Editor::metric_get_bbt (std::vector<ArdourCanvas::Ruler::Mark>& marks, gdouble l
 
 		for (n = 1, i = grid.begin(); n < bbt_nmarks && i != grid.end(); ++i) {
 
-			std::cerr << "Considering " << *i << std::endl;
-
 			if (i->sample() < lower && (bbt_bar_helper_on)) {
 				snprintf (buf, sizeof(buf), "<%" PRIu32 "|%" PRIu32, i->bbt().bars, i->bbt().beats);
 				edit_last_mark_label (marks, buf);
 			} else {
 
 				if (i->bbt().is_bar()) {
-					std::cerr << "is bar\n";
 					mark.style = ArdourCanvas::Ruler::Mark::Major;
 					snprintf (buf, sizeof(buf), "%" PRIu32, i->bbt().bars);
 				} else if ((i->bbt().beats % 2) == 1) {
-					std::cerr << "is minor\n";
 					mark.style = ArdourCanvas::Ruler::Mark::Minor;
 					buf[0] = '\0';
 				} else {
-					std::cerr << "is micro\n";
 					mark.style = ArdourCanvas::Ruler::Mark::Micro;
 					buf[0] = '\0';
 				}

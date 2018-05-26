@@ -93,24 +93,14 @@ Session::click (samplepos_t cycle_start, samplecnt_t nframes)
 		_tempo_map->get_grid (points, start, end, 0);
 	}
 
-	if (distance (points.begin(), points.end()) == 0) {
-		goto run_clicks;
-	}
-
 	for (Temporal::TempoMapPoints::iterator i = points.begin(); i != points.end(); ++i) {
-		switch ((*i).bbt().beats) {
-		case 1:
-			add_click (Temporal::superclock_to_samples ((*i).sclock(), sample_rate()), true);
-			break;
-		default:
-			if (click_emphasis_data == 0 || (Config->get_use_click_emphasis () == false) || (click_emphasis_data && (*i).bbt().beats != 1)) { // XXX why is this check needed ??  (*i).beats !=1 must be true here
-				add_click (Temporal::superclock_to_samples ((*i).sclock(), sample_rate()), false);
-			}
-			break;
+		if (i->bbt().is_bar() && (click_emphasis_data && Config->get_use_click_emphasis())) {
+			add_click (i->sample(), true);
+		} else {
+			add_click (i->sample(), false);
 		}
 	}
 
-  run_clicks:
 	clickm.release ();
 	run_click (cycle_start, nframes);
 }

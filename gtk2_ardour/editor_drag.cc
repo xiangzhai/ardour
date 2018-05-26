@@ -3947,16 +3947,16 @@ TempoEndDrag::start_grab (GdkEvent* event, Gdk::Cursor* cursor)
 
 	ostringstream sstr;
 
-	TempoPoint const * prev = tmap.previous_tempo (_point->tempo);
+	TempoPoint const * prev = tmap.previous_tempo (_point->tempo());
 
 	if (prev != 0) {
 		_editor->tempo_curve_selected (*prev, true);
-		sstr << "end: " << fixed << setprecision(3) << _point->tempo.end_note_types_per_minute() << "\n";
+		sstr << "end: " << fixed << setprecision(3) << _point->tempo().end_note_types_per_minute() << "\n";
 	}
 
-	if (_point->tempo.clamped()) {
-		_editor->tempo_curve_selected (_point->tempo, true);
-		sstr << "start: " << fixed << setprecision(3) << _point->tempo.note_types_per_minute();
+	if (_point->tempo().clamped()) {
+		_editor->tempo_curve_selected (_point->tempo(), true);
+		sstr << "start: " << fixed << setprecision(3) << _point->tempo().note_types_per_minute();
 	}
 
 	show_verbose_cursor_text (sstr.str());
@@ -4012,14 +4012,14 @@ TempoEndDrag::finished (GdkEvent* event, bool movement_occurred)
 	_editor->session()->add_command(new MementoCommand<TempoMap>(tmap, _before_state, &after));
 	_editor->commit_reversible_command ();
 
-	TempoPoint const * prev = tmap.previous_tempo (_point->tempo);
+	TempoPoint const * prev = tmap.previous_tempo (_point->tempo());
 
 	if (prev != 0) {
 		_editor->tempo_curve_selected (*prev, false);
 	}
 
-	if (_point->tempo.clamped()) {
-		_editor->tempo_curve_selected (_point->tempo, false);
+	if (_point->tempo().clamped()) {
+		_editor->tempo_curve_selected (_point->tempo(), false);
 
 	}
 }

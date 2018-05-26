@@ -6820,10 +6820,10 @@ Editor::define_one_bar (samplepos_t start, samplepos_t end)
 	XMLNode& before (_session->tempo_map().get_state());
 
 	if (do_global) {
-		Tempo nt (beats_per_minute, t.tempo.end_note_types_per_minute(), t.note_type());
+		Tempo nt (beats_per_minute, t.tempo().end_note_types_per_minute(), t.note_type());
 		_session->tempo_map().set_tempo (nt, timepos_t (0));
-	} else if (t.tempo.sclock() == samples_to_superclock (start, _session->sample_rate())) {
-		Tempo nt (beats_per_minute, t.tempo.end_note_types_per_minute(), t.note_type());
+	} else if (t.tempo().sclock() == samples_to_superclock (start, _session->sample_rate())) {
+		Tempo nt (beats_per_minute, t.tempo().end_note_types_per_minute(), t.note_type());
 		_session->tempo_map().set_tempo (nt, timepos_t (start));
 	} else {
 		/* constant tempo */

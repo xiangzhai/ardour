@@ -104,30 +104,30 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 			snprintf (buf, sizeof(buf), "%d/%d", i->divisions_per_bar(), i->note_value ());
 
 			if (i->map().time_domain() != Temporal::AudioTime) {
-				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker music"), buf, i->meter));
+				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker music"), buf, i->meter()));
 			} else {
-				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker"), buf, i->meter));
+				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker"), buf, i->meter()));
 			}
 		}
 
 		if (i->is_explicit_tempo()) {
 
-			max_tempo = max (max_tempo, i->tempo.note_types_per_minute());
-			max_tempo = max (max_tempo, i->tempo.end_note_types_per_minute());
-			min_tempo = min (min_tempo, i->tempo.note_types_per_minute());
-			min_tempo = min (min_tempo, i->tempo.end_note_types_per_minute());
+			max_tempo = max (max_tempo, i->tempo().note_types_per_minute());
+			max_tempo = max (max_tempo, i->tempo().end_note_types_per_minute());
+			min_tempo = min (min_tempo, i->tempo().note_types_per_minute());
+			min_tempo = min (min_tempo, i->tempo().end_note_types_per_minute());
 			uint32_t const tc_color = UIConfiguration::instance().color ("tempo curve");
 
-			tempo_curves.push_back (new TempoCurve (*this, *tempo_group, tc_color, i->tempo, i->sample(), false));
+			tempo_curves.push_back (new TempoCurve (*this, *tempo_group, tc_color, i->tempo(), i->sample(), false));
 
 			const std::string tname (X_(""));
 			if (i->map().time_domain() != Temporal::AudioTime) {
-				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker music"), tname, i->tempo));
+				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker music"), tname, i->tempo()));
 			} else {
-				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker"), tname, i->tempo));
+				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker"), tname, i->tempo()));
 			}
 
-			if (prev_ts != points.end() && abs (prev_ts->tempo.end_note_types_per_minute() - i->tempo.note_types_per_minute()) < 1.0) {
+			if (prev_ts != points.end() && abs (prev_ts->tempo().end_note_types_per_minute() - i->tempo().note_types_per_minute()) < 1.0) {
 				metric_marks.back()->set_points_color (UIConfiguration::instance().color ("tempo marker music"));
 			} else {
 				metric_marks.back()->set_points_color (UIConfiguration::instance().color ("tempo marker"));

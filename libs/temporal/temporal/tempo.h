@@ -294,6 +294,7 @@ class LIBTEMPORAL_API Meter {
 	BBT_Time bbt_add (BBT_Time const & bbt, BBT_Offset const & add) const;
 	BBT_Time bbt_subtract (BBT_Time const & bbt, BBT_Offset const & sub) const;
 	BBT_Time round_to_bar (BBT_Time const &) const;
+	BBT_Time round_up_to_beat (BBT_Time const &) const;
 	Beats    to_quarters (BBT_Offset const &) const;
 
 	XMLNode& get_state () const;
@@ -378,58 +379,58 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 */
 class LIBTEMPORAL_API TempoMetric {
   public:
-	TempoMetric (TempoPoint & t, MeterPoint & m) : tempo (t), meter (m) {}
+	TempoMetric (TempoPoint & t, MeterPoint & m) : _tempo (&t), _meter (&m) {}
 	~TempoMetric () {}
 
-	TempoPoint & tempo;
-	MeterPoint & meter;
+	TempoPoint & tempo() const { return *_tempo; }
+	MeterPoint & meter() const { return *_meter; }
 
 	/* even more convenient wrappers for individual aspects of a
 	 * TempoMetric (i.e. just tempo or just meter information required
 	 */
 
-	superclock_t superclock_at (Beats const & qn) const { return tempo.superclock_at (qn); }
-	Beats quarters_at (superclock_t sc) const { return tempo.quarters_at (sc); }
-	Beats quarters_at (BBT_Time const & bbt) const { return meter.quarters_at (bbt); }
-	BBT_Time bbt_at (Beats const & beats) const { return meter.bbt_at (beats); }
+	superclock_t superclock_at (Beats const & qn) const { return _tempo->superclock_at (qn); }
+	Beats quarters_at (superclock_t sc) const { return _tempo->quarters_at (sc); }
+	Beats quarters_at (BBT_Time const & bbt) const { return _meter->quarters_at (bbt); }
+	BBT_Time bbt_at (Beats const & beats) const { return _meter->bbt_at (beats); }
 
-	superclock_t superclocks_per_note_type () const { return tempo.superclocks_per_note_type (); }
-	superclock_t end_superclocks_per_note_type () const {return tempo.end_superclocks_per_note_type (); }
-	superclock_t superclocks_per_note_type (int note_type) const {return tempo.superclocks_per_note_type (note_type); }
-	superclock_t superclocks_per_quarter_note () const {return tempo.superclocks_per_quarter_note (); }
-	superclock_t superclocks_per_ppqn () const {return tempo.superclocks_per_ppqn (); }
+	superclock_t superclocks_per_note_type () const { return _tempo->superclocks_per_note_type (); }
+	superclock_t end_superclocks_per_note_type () const {return _tempo->end_superclocks_per_note_type (); }
+	superclock_t superclocks_per_note_type (int note_type) const {return _tempo->superclocks_per_note_type (note_type); }
+	superclock_t superclocks_per_quarter_note () const {return _tempo->superclocks_per_quarter_note (); }
+	superclock_t superclocks_per_ppqn () const {return _tempo->superclocks_per_ppqn (); }
 
-	int note_type () const { return tempo.note_type(); }
-	int divisions_per_bar () const { return meter.divisions_per_bar(); }
-	int note_value() const { return meter.note_value(); }
-	BBT_Time   bbt_add (BBT_Time const & bbt, BBT_Offset const & add) const { return meter.bbt_add (bbt, add); }
-	BBT_Time   bbt_subtract (BBT_Time const & bbt, BBT_Offset const & sub) const { return meter.bbt_subtract (bbt, sub); }
-	BBT_Time round_to_bar (BBT_Time const & bbt) const { return meter.round_to_bar (bbt); }
-	Beats to_quarters (BBT_Offset const & bbo) const { return meter.to_quarters (bbo); }
+	int note_type () const { return _tempo->note_type(); }
+	int divisions_per_bar () const { return _meter->divisions_per_bar(); }
+	int note_value() const { return _meter->note_value(); }
+	BBT_Time   bbt_add (BBT_Time const & bbt, BBT_Offset const & add) const { return _meter->bbt_add (bbt, add); }
+	BBT_Time   bbt_subtract (BBT_Time const & bbt, BBT_Offset const & sub) const { return _meter->bbt_subtract (bbt, sub); }
+	BBT_Time round_to_bar (BBT_Time const & bbt) const { return _meter->round_to_bar (bbt); }
+	Beats to_quarters (BBT_Offset const & bbo) const { return _meter->to_quarters (bbo); }
 
 	/* combination methods that require both tempo and meter information */
 
 	superclock_t superclocks_per_bar (samplecnt_t sr) const {
-		return superclocks_per_grid (sr) * meter.divisions_per_bar();
+		return superclocks_per_grid (sr) * _meter->divisions_per_bar();
 	}
 	superclock_t superclocks_per_grid (samplecnt_t sr) const {
-		return llrint (tempo.superclocks_per_note_type() * ((double) tempo.note_type() / meter.note_value()));
+		return llrint (_tempo->superclocks_per_note_type() * ((double) _tempo->note_type() / _meter->note_value()));
 	}
 
 	superclock_t superclock_per_note_type_at_superclock (superclock_t sc) const {
-		return tempo.superclocks_per_note_type () * expm1 (tempo.c_per_superclock() * sc);
+		return _tempo->superclocks_per_note_type () * expm1 (_tempo->c_per_superclock() * sc);
 	}
 
 	BBT_Time bbt_at (superclock_t sc) const;
 	superclock_t superclock_at (BBT_Time const &) const;
 
-	/* XXX technically this is returning ARDOUR::samplecnt_t but that type is
-	   not available here in libtemporal.
-	*/
-
-	superclock_t samples_per_bar (samplecnt_t sr) const {
+	samplepos_t samples_per_bar (samplecnt_t sr) const {
 		return superclock_to_samples (superclocks_per_bar (sr), sr);
 	}
+
+  protected:
+	TempoPoint* _tempo;
+	MeterPoint* _meter;
 };
 
 /* A music time point is a place where BBT time (BarTime) is reset from
@@ -508,8 +509,8 @@ class LIBTEMPORAL_API TempoMapPoint : public Point, public TempoMetric
 	void end_float ();
 	bool floating() const { return _floating; }
 
-	bool is_explicit_meter() const { return meter.sclock() == sclock(); }
-	bool is_explicit_tempo() const { return tempo.sclock() == sclock(); }
+	bool is_explicit_meter() const { return _meter->sclock() == sclock(); }
+	bool is_explicit_tempo() const { return _tempo->sclock() == sclock(); }
 	bool is_explicit_position() const { return false; }
 	bool is_explicit () const { return is_explicit_meter() || is_explicit_tempo() || is_explicit_position(); }
 
@@ -582,7 +583,7 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 
 	/* convenience function */
 	BBT_Time round_to_bar (BBT_Time const & bbt) const {
-		return metric_at (bbt).meter.round_to_bar (bbt);
+		return metric_at (bbt).meter().round_to_bar (bbt);
 	}
 
 	BBT_Time bbt_at (samplepos_t sc) const;
