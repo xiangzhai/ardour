@@ -2037,19 +2037,126 @@ TempoMap::samples_per_quarter_note_at (samplepos_t samples) const
 }
 
 BBT_Time
-TempoMap::bbt_walk (BBT_Time const & bbt, BBT_Offset const & offset) const
+TempoMap::bbt_walk (BBT_Time const & bbt, BBT_Offset const & o) const
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	// TempoMapPoint const & start (const_point_at (bbt));
+	BBT_Offset offset (o);
+	Tempos::const_iterator t, prev_t, next_t;
+	Meters::const_iterator m, prev_m, next_m;
 
-#warning TempoMap::bbt_walk() is not yet implemented
+	assert (!_tempos.empty());
+	assert (!_meters.empty());
 
-	/* common case: start + finish are both defined by the same TempoMetric */
+	/* trivial (and common) case: single tempo, single meter */
 
-	/* uncommon case: at least one tempo and/or meter change between start
-	 * and finish ... have to walk.
+	if (_tempos.size() == 1 && _meters.size() == 1) {
+		return _meters.front().bbt_add (bbt, o);
+	}
+
+	/* Find tempo,meter pair for bbt, and also for the next tempo and meter
+	 * after each (if any)
 	 */
-	return BBT_Time ();
+
+	/* Yes, linear search because the typical size of _tempos and _meters
+	 * is 1, and extreme sizes are on the order of 10
+	 */
+
+	next_t = _tempos.end();
+	next_m = _meters.end();
+
+	for (t = _tempos.begin(), prev_t = t; t != _tempos.end() && t->bbt() < bbt;) {
+		prev_t = t;
+		++t;
+
+		if (t != _tempos.end()) {
+			next_t = t;
+			++next_t;
+		}
+	}
+
+	for (m = _meters.begin(), prev_m = m; m != _meters.end() && m->bbt() < bbt;) {
+		prev_m = m;
+		++m;
+
+		if (m != _meters.end()) {
+			next_m = m;
+			++next_m;
+		}
+	}
+
+	/* may have found tempo and/or meter precisely at the tiem given */
+
+	if (t != _tempos.end() && t->bbt() == bbt) {
+		prev_t = t;
+	}
+
+	if (m != _meters.end() && m->bbt() == bbt) {
+		prev_m = m;
+	}
+
+	/* see ::meter_at_locked() for comments about the use of const_cast here
+	 */
+
+	TempoMetric metric (*const_cast<TempoPoint*>(&*prev_t), *const_cast<MeterPoint*>(&*prev_m));
+	superclock_t pos = metric.superclock_at (bbt);
+
+	/* normalize possibly too-large ticks count */
+
+	const int32_t ppbd = (Beats::PPQN * 4) / metric.note_value();
+
+	if (offset.ticks > ppbd) {
+		/* normalize */
+		offset.beats += offset.ticks / ppbd;
+		offset.ticks %= ppbd;
+	}
+
+	/* add tick count, now guaranteed to be less than 1 grid unit */
+
+	if (offset.ticks) {
+		pos += metric.superclocks_per_ppqn () * offset.ticks;
+	}
+
+	/* add each beat, 1 by 1, rechecking to see if there's a new
+	 * TempoMetric in effect after each addition
+	 */
+
+#define TEMPO_CHECK_FOR_NEW_METRIC                                      \
+	if (((next_t != _tempos.end()) && (pos >= next_t->sclock())) || \
+	    ((next_m != _meters.end()) && (pos >= next_m->sclock()))) { \
+		/* need new metric */ \
+		if (pos >= next_t->sclock()) { \
+			if (pos >= next_m->sclock()) { \
+				metric = TempoMetric (*const_cast<TempoPoint*>(&*next_t), *const_cast<MeterPoint*>(&*next_m)); \
+				++next_t; \
+				++next_m; \
+			} else { \
+				metric = TempoMetric (*const_cast<TempoPoint*>(&*next_t), metric.meter()); \
+				++next_t; \
+			} \
+		} else if (pos >= next_m->sclock()) { \
+			metric = TempoMetric (metric.tempo(), *const_cast<MeterPoint*>(&*next_m)); \
+			++next_m; \
+		} \
+	}
+
+	for (int32_t b = 0; b < offset.beats; ++b) {
+
+		TEMPO_CHECK_FOR_NEW_METRIC;
+		pos += metric.superclocks_per_grid (_sample_rate);
+	}
+
+	/* add each bar, 1 by 1, rechecking to see if there's a new
+	 * TempoMetric in effect after each addition
+	 */
+
+	for (int32_t b = 0; b < offset.bars; ++b) {
+
+		TEMPO_CHECK_FOR_NEW_METRIC;
+
+		pos += metric.superclocks_per_bar (_sample_rate);
+	}
+
+	return metric.bbt_at (pos);
 }
 
 Temporal::Beats
