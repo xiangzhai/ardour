@@ -620,7 +620,7 @@ TempoMap::maybe_rebuild ()
 MeterPoint const &
 TempoMap::meter_at (timepos_t const & time) const
 {
-	switch (time.lock_style()) {
+	switch (time.time_domain()) {
 	case AudioTime:
 		return meter_at (time.sample());
 		break;
@@ -696,7 +696,7 @@ TempoMap::meter_at_locked (Beats const & beats) const
 TempoPoint const &
 TempoMap::tempo_at (timepos_t const & time) const
 {
-	switch (time.lock_style()) {
+	switch (time.time_domain()) {
 	case AudioTime:
 		return tempo_at (time.sample());
 		break;
@@ -1183,7 +1183,7 @@ TempoMap::set_tempo (Tempo const & t, Beats const & beats)
 TempoPoint &
 TempoMap::set_tempo (Tempo const & t, timepos_t const & time)
 {
-	switch (time.lock_style()) {
+	switch (time.time_domain()) {
 	case AudioTime:
 		return set_tempo (t, time.sample());
 		break;
@@ -1392,7 +1392,7 @@ TempoMap::move_tempo (TempoPoint const & tp, timepos_t const & when, bool push)
 MeterPoint &
 TempoMap::set_meter (Meter const & m, timepos_t const & time)
 {
-	switch (time.lock_style()) {
+	switch (time.time_domain()) {
 	case AudioTime:
 		return set_meter (m, S2Sc (time.sample()));
 	case BarTime:
@@ -1627,7 +1627,7 @@ TempoMap::iterator_at (Temporal::BBT_Time const & bbt)
 Temporal::BBT_Time
 TempoMap::bbt_at (timepos_t const & pos) const
 {
-	switch (pos.lock_style()) {
+	switch (pos.time_domain()) {
 	case BarTime:
 		return pos.bbt();
 	case AudioTime:
@@ -1670,7 +1670,7 @@ TempoMap::sample_at (Temporal::BBT_Time const & bbt) const
 samplepos_t
 TempoMap::sample_at (timepos_t const & pos) const
 {
-	switch (pos.lock_style()) {
+	switch (pos.time_domain()) {
 	case BarTime:
 		return sample_at (pos.bbt());
 	case BeatTime:
@@ -1981,16 +1981,14 @@ TempoMap::update_music_times (int generation, samplepos_t pos, Temporal::Beats &
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 
-	if (!force && (generation == _generation)) {
-		return _generation;
+	if (force || (generation != _generation)) {
+
+		const superclock_t sc = S2Sc (pos);
+		TempoMetric tm (metric_at_locked (sc));
+
+		b = tm.quarters_at (sc);
+		bbt = tm.bbt_at (sc);
 	}
-
-	const superclock_t sc = S2Sc (pos);
-
-	TempoMetric tm (metric_at_locked (sc));
-
-	b = tm.quarters_at (sc);
-	bbt = tm.bbt_at (sc);
 
 	return _generation;
 }
@@ -2000,14 +1998,13 @@ TempoMap::update_samples_and_bbt_times (int generation, Temporal::Beats const & 
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 
-	if (!force && (generation == _generation)) {
-		return _generation;
+	if (force || (generation != _generation)) {
+
+		TempoMetric metric (metric_at_locked (b));
+
+		pos = samples_to_superclock (metric.superclock_at (b), _sample_rate);
+		bbt = metric.bbt_at (b);
 	}
-
-	TempoMetric metric (metric_at_locked (b));
-
-	pos = samples_to_superclock (metric.superclock_at (b), _sample_rate);
-	bbt = metric.bbt_at (b);
 
 	return _generation;
 }
@@ -2017,14 +2014,12 @@ TempoMap::update_samples_and_beat_times (int generation, Temporal::BBT_Time cons
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 
-	if (!force && (generation == _generation)) {
-		return _generation;
+	if (force || (generation != _generation)) {
+		TempoMetric metric = metric_at_locked (bbt);
+
+		pos = superclock_to_samples (metric.superclock_at (bbt), _sample_rate);
+		b = metric.quarters_at (bbt);
 	}
-
-	TempoMetric metric = metric_at_locked (bbt);
-
-	pos = superclock_to_samples (metric.superclock_at (bbt), _sample_rate);
-	b = metric.quarters_at (bbt);
 
 	return _generation;
 }
@@ -2162,7 +2157,7 @@ TempoMap::bbt_walk (BBT_Time const & bbt, BBT_Offset const & o) const
 Temporal::Beats
 TempoMap::quarter_note_at (timepos_t const & pos) const
 {
-	switch (pos.lock_style()) {
+	switch (pos.time_domain()) {
 	case BeatTime:
 		return pos.beats();
 	case AudioTime:
@@ -2375,7 +2370,7 @@ TempoMap::full_duration_at (timepos_t const & pos, timecnt_t const & duration, T
 			/*NOTREACHED*/
 			break;
 		case BeatTime:
-			switch (p.lock_style()) {
+			switch (p.time_domain()) {
 			case BeatTime:
 				break;
 			case BarTime:
@@ -2639,7 +2634,7 @@ TempoMap::previous_tempo (TempoPoint const & point) const
 TempoMetric
 TempoMap::metric_at (timepos_t const & pos) const
 {
-	switch (pos.lock_style()) {
+	switch (pos.time_domain()) {
 	case AudioTime:
 		return metric_at (pos.sample());
 	case BeatTime:

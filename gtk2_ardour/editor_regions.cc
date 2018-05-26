@@ -524,7 +524,7 @@ EditorRegions::region_changed (boost::shared_ptr<Region> r, const PropertyChange
 	our_interests.add (ARDOUR::Properties::start);
 	our_interests.add (ARDOUR::Properties::sync_position);
 	our_interests.add (ARDOUR::Properties::locked);
-	our_interests.add (ARDOUR::Properties::position_lock_style);
+	our_interests.add (ARDOUR::Properties::position_time_domain);
 	our_interests.add (ARDOUR::Properties::muted);
 	our_interests.add (ARDOUR::Properties::opaque);
 	our_interests.add (ARDOUR::Properties::fade_in);
@@ -813,7 +813,7 @@ EditorRegions::populate_row (boost::shared_ptr<Region> region, TreeModel::Row co
 	if (all || what_changed.contains (Properties::locked)) {
 		populate_row_locked (region, row, used);
 	}
-	if (all || what_changed.contains (Properties::position_lock_style)) {
+	if (all || what_changed.contains (Properties::position_time_domain)) {
 		populate_row_glued (region, row, used);
 	}
 	if (all || what_changed.contains (Properties::muted)) {
@@ -993,7 +993,7 @@ EditorRegions::populate_row_glued (boost::shared_ptr<Region> region, TreeModel::
 	if (region->whole_file() || used > 1) {
 		row[_columns.glued] = false;
 	} else {
-		if (region->position_lock_style() != Temporal::AudioTime) {
+		if (region->position_time_domain() != Temporal::AudioTime) {
 			row[_columns.glued] = true;
 		} else {
 			row[_columns.glued] = false;
@@ -1496,7 +1496,7 @@ EditorRegions::glued_changed (std::string const & path)
 		boost::shared_ptr<ARDOUR::Region> region = (*i)[_columns.region];
 		if (region) {
 			/* `glued' means BarTime, and we're toggling here */
-			region->set_position_lock_style ((*i)[_columns.glued] ? Temporal::AudioTime : Temporal::BarTime);
+			region->set_position_time_domain ((*i)[_columns.glued] ? Temporal::AudioTime : Temporal::BarTime);
 		}
 	}
 

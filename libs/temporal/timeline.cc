@@ -75,7 +75,7 @@ std::operator<< (std::ostream & o, timecnt_t const & tc)
 }
 
 timecnt_t::timecnt_t (timepos_t const & tp, timepos_t const & pos)
-	: _style (tp.lock_style())
+	: _style (tp.time_domain())
 	, _position (pos)
 {
 	switch (_style) {
@@ -182,7 +182,7 @@ timecnt_t::compute_bbt() const
 timecnt_t &
 timecnt_t::operator= (timepos_t const & tp)
 {
-	_style = tp.lock_style();
+	_style = tp.time_domain();
 
 	switch (_style) {
 	case Temporal::AudioTime:
@@ -308,9 +308,9 @@ timecnt_t::to_string () const
 TempoMap* timepos_t::_tempo_map = 0;
 
 /* special private constructor for max_timepos() */
-timepos_t::timepos_t (PositionLockStatus /*ignored*/)
+timepos_t::timepos_t (TimeDomainStatus /*ignored*/)
 	: update_generation (-1)
-	, _lock_status (PositionLockStatus (AudioTime))
+	, _domain_status (TimeDomainStatus (AudioTime))
 	, _samplepos (std::numeric_limits<samplepos_t>::max())
 {
 	_beats = std::numeric_limits<Beats>::max ();
@@ -321,7 +321,7 @@ timepos_t timepos_t::_max_timepos (Temporal::AudioTime);
 
 timepos_t::timepos_t()
 	: update_generation (-1)
-	, _lock_status (AudioTime, Dirty (BeatsDirty|BBTDirty))
+	, _domain_status (AudioTime, Dirty (BeatsDirty|BBTDirty))
 	, _samplepos (0)
 {
 }
@@ -334,21 +334,21 @@ timepos_t::timepos_t (timecnt_t const & t)
 
 timepos_t::timepos_t (samplepos_t s)
 	: update_generation (-1)
-	, _lock_status (AudioTime, Dirty (BeatsDirty|BBTDirty))
+	, _domain_status (AudioTime, Dirty (BeatsDirty|BBTDirty))
 	, _samplepos (s)
 {
 }
 
 timepos_t::timepos_t (Temporal::Beats const & b)
 	: update_generation (-1)
-	, _lock_status (BeatTime, Dirty (SampleDirty|BBTDirty))
+	, _domain_status (BeatTime, Dirty (SampleDirty|BBTDirty))
 	, _beats (b)
 {
 }
 
 timepos_t::timepos_t (Temporal::BBT_Time const & bbt)
 	: update_generation (-1)
-	, _lock_status (BarTime, Dirty (SampleDirty|BeatsDirty))
+	, _domain_status (BarTime, Dirty (SampleDirty|BeatsDirty))
 	, _bbt (bbt)
 {
 }
@@ -362,21 +362,21 @@ timepos_t::operator= (timecnt_t const & t)
 		if (_samplepos < 0) {
 			throw TemporalStyleException ("negative sample timecnt used to construct timepos");
 		}
-		_lock_status = PositionLockStatus (AudioTime, Dirty (BeatsDirty|BBTDirty));
+		_domain_status = TimeDomainStatus (AudioTime, Dirty (BeatsDirty|BBTDirty));
 		break;
 	case BeatTime:
 		_beats = t.beats();
 		if (_beats < Beats()) {
 			throw TemporalStyleException ("negative beat timecnt used to construct timepos");
 		}
-		_lock_status = PositionLockStatus (BeatTime, Dirty (SampleDirty|BBTDirty));
+		_domain_status = TimeDomainStatus (BeatTime, Dirty (SampleDirty|BBTDirty));
 		break;
 	case BarTime:
 		_bbt = BBT_Time (t.bbt().bars, t.bbt().beats, t.bbt().ticks);
 		if (_bbt < BBT_Time()) {
 			throw TemporalStyleException ("negative BBT timecnt used to construct timepos");
 		}
-		_lock_status = PositionLockStatus (BarTime, Dirty (BeatsDirty|SampleDirty));
+		_domain_status = TimeDomainStatus (BarTime, Dirty (BeatsDirty|SampleDirty));
 		break;
 	}
 	return *this;
@@ -386,27 +386,27 @@ void
 timepos_t::set_sample (samplepos_t s)
 {
 	_samplepos = s;
-	_lock_status = PositionLockStatus (AudioTime, Dirty (BeatTime|BarTime));
+	_domain_status = TimeDomainStatus (AudioTime, Dirty (BeatTime|BarTime));
 }
 
 void
 timepos_t::set_beat (Beats const & b)
 {
 	_beats = b;
-	_lock_status = PositionLockStatus (BeatTime, Dirty (AudioTime|BarTime));
+	_domain_status = TimeDomainStatus (BeatTime, Dirty (AudioTime|BarTime));
 }
 
 void
 timepos_t::set_bbt (BBT_Time const & bbt)
 {
 	_bbt = bbt;
-	_lock_status = PositionLockStatus (BarTime, Dirty (BeatTime|AudioTime));
+	_domain_status = TimeDomainStatus (BarTime, Dirty (BeatTime|AudioTime));
 }
 
 samplepos_t
 timepos_t::sample () const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		break;
 	case BeatTime:
@@ -426,7 +426,7 @@ timepos_t::sample () const
 Temporal::Beats
 timepos_t::beats () const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		DEBUG_TRACE (DEBUG::TemporalDomainConvert, "convert audio to beats\n");
 		stats.audio_to_beats++;
@@ -446,7 +446,7 @@ timepos_t::beats () const
 Temporal::BBT_Time
 timepos_t::bbt() const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		DEBUG_TRACE (DEBUG::TemporalDomainConvert, "convert audio to bbt\n");
 		stats.audio_to_bars++;
@@ -468,26 +468,26 @@ timepos_t::bbt() const
 void
 timepos_t::update_music_times () const
 {
-	update_generation = _tempo_map->update_music_times (update_generation, _samplepos, _beats, _bbt, _lock_status.dirty() & (BeatsDirty|BBTDirty));
+	update_generation = _tempo_map->update_music_times (update_generation, _samplepos, _beats, _bbt, _domain_status.dirty() & (BeatsDirty|BBTDirty));
 }
 
 void
 timepos_t::update_audio_and_beat_times () const
 {
-	update_generation = _tempo_map->update_samples_and_beat_times (update_generation, _bbt, _samplepos, _beats, _lock_status.dirty() & (SampleDirty|BeatsDirty));
+	update_generation = _tempo_map->update_samples_and_beat_times (update_generation, _bbt, _samplepos, _beats, _domain_status.dirty() & (SampleDirty|BeatsDirty));
 }
 
 void
 timepos_t::update_audio_and_bbt_times () const
 {
-	update_generation = _tempo_map->update_samples_and_bbt_times (update_generation, _beats, _samplepos, _bbt, _lock_status.dirty() & (SampleDirty|BBTDirty));
+	update_generation = _tempo_map->update_samples_and_bbt_times (update_generation, _beats, _samplepos, _bbt, _domain_status.dirty() & (SampleDirty|BBTDirty));
 }
 
 timepos_t
 timepos_t::operator/(double d) const
 {
 	assert (d >= 0.0); /* do not allow a position to become negative via division */
-	switch (lock_style()) {
+	switch (time_domain()) {
 	case Temporal::AudioTime:
 		return timepos_t (samplepos_t (llrint (_samplepos / d)));
 	case Temporal::BeatTime:
@@ -503,7 +503,7 @@ timepos_t
 timepos_t::operator*(double d) const
 {
 	assert (d >= 0.0); /* do not allow a position to become negative via multiplication */
-	switch (lock_style()) {
+	switch (time_domain()) {
 	case Temporal::AudioTime:
 		return timepos_t (samplepos_t (llrint (_samplepos * d)));
 	case Temporal::BeatTime:
@@ -519,14 +519,14 @@ timepos_t &
 timepos_t::operator/=(double d)
 {
 	assert (d >= 0.0); /* do not allow a position to become negative via division */
-	switch (lock_style()) {
+	switch (time_domain()) {
 	case Temporal::AudioTime:
 		_samplepos = samplepos_t (llrint (_samplepos / d));
-		_lock_status.set_dirty (Dirty (BeatsDirty|BBTDirty));
+		_domain_status.set_dirty (Dirty (BeatsDirty|BBTDirty));
 		return *this;
 	case Temporal::BeatTime:
 		_beats = _beats / d;
-		_lock_status.set_dirty (Dirty (SampleDirty|BBTDirty));
+		_domain_status.set_dirty (Dirty (SampleDirty|BBTDirty));
 		return *this;
 	default:
 		break;
@@ -539,14 +539,14 @@ timepos_t &
 timepos_t::operator*=(double d)
 {
 	assert (d >= 0.0); /* do not allow a position to become negative via multiplication */
-	switch (lock_style()) {
+	switch (time_domain()) {
 	case Temporal::AudioTime:
 		_samplepos = samplepos_t (llrint (_samplepos * d));
-		_lock_status.set_dirty (Dirty (BeatsDirty|BBTDirty));
+		_domain_status.set_dirty (Dirty (BeatsDirty|BBTDirty));
 		return *this;
 	case Temporal::BeatTime:
 		_beats = _beats * d;
-		_lock_status.set_dirty (Dirty (SampleDirty|BBTDirty));
+		_domain_status.set_dirty (Dirty (SampleDirty|BBTDirty));
 		return *this;
 	default:
 		break;
@@ -558,9 +558,9 @@ timepos_t::operator*=(double d)
 timepos_t
 timepos_t::operator+(timepos_t const & d) const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
-		switch (d.lock_style()) {
+		switch (d.time_domain()) {
 		case AudioTime:
 			return timepos_t (_samplepos + d.sample());
 		case BeatTime:
@@ -571,7 +571,7 @@ timepos_t::operator+(timepos_t const & d) const
 		}
 		break;
 	case BeatTime:
-		switch (d.lock_style()) {
+		switch (d.time_domain()) {
 		case AudioTime:
 			update_audio_and_bbt_times ();
 			return timepos_t (timepos_t (_samplepos + d.sample()).beats());
@@ -583,7 +583,7 @@ timepos_t::operator+(timepos_t const & d) const
 		}
 		break;
 	case BarTime:
-		switch (d.lock_style()) {
+		switch (d.time_domain()) {
 		case AudioTime:
 			update_audio_and_beat_times ();
 			return timepos_t (timepos_t (_samplepos + d.sample()).bbt());
@@ -615,7 +615,7 @@ timepos_t::operator+ (Temporal::Beats const & b) const
 timepos_t
 timepos_t::operator+ (Temporal::BBT_Offset const & bbt) const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		update_music_times ();
 		break;
@@ -638,9 +638,9 @@ timepos_t::operator+ (Temporal::BBT_Offset const & bbt) const
 timecnt_t
 timepos_t::distance (timepos_t const & d) const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
-		switch (d.lock_style()) {
+		switch (d.time_domain()) {
 		case AudioTime:
 			return timecnt_t (d.sample() - _samplepos, *this);
 		case BeatTime:
@@ -651,7 +651,7 @@ timepos_t::distance (timepos_t const & d) const
 		}
 		break;
 	case BeatTime:
-		switch (d.lock_style()) {
+		switch (d.time_domain()) {
 		case AudioTime:
 			update_audio_and_bbt_times ();
 			return timecnt_t (d.sample() - _samplepos, *this);
@@ -666,7 +666,7 @@ timepos_t::distance (timepos_t const & d) const
 		break;
 	}
 
-	switch (d.lock_style()) {
+	switch (d.time_domain()) {
 	case AudioTime:
 		update_audio_and_beat_times ();
 		return timecnt_t (d.sample() - _samplepos, *this);
@@ -683,7 +683,7 @@ timepos_t::distance (timepos_t const & d) const
 timecnt_t
 timepos_t::distance (samplepos_t s) const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		break;
 	case BeatTime:
@@ -704,7 +704,7 @@ timepos_t::distance (samplepos_t s) const
 timecnt_t
 timepos_t::distance (Temporal::Beats const & b) const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		update_music_times ();
 		break;
@@ -720,7 +720,7 @@ timepos_t::distance (Temporal::Beats const & b) const
 timecnt_t
 timepos_t::distance (Temporal::BBT_Offset const & bbt) const
 {
-switch (_lock_status.style()) {
+switch (_domain_status.style()) {
 	case AudioTime:
 		update_music_times ();
 		break;
@@ -740,7 +740,7 @@ switch (_lock_status.style()) {
 timepos_t
 timepos_t:: earlier (samplepos_t s) const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		break;
 	case BeatTime:
@@ -761,7 +761,7 @@ timepos_t:: earlier (samplepos_t s) const
 timepos_t
 timepos_t::earlier (Temporal::Beats const & b) const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		update_music_times ();
 		break;
@@ -778,7 +778,7 @@ timepos_t::earlier (Temporal::Beats const & b) const
 timepos_t
 timepos_t::earlier (Temporal::BBT_Offset const & bbt) const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		update_music_times ();
 		break;
@@ -795,7 +795,7 @@ timepos_t::earlier (Temporal::BBT_Offset const & bbt) const
 timepos_t
 timepos_t::earlier (timepos_t const & other) const
 {
-	switch (other.lock_style()) {
+	switch (other.time_domain()) {
 	case AudioTime:
 		return earlier (other.sample());
 	case BeatTime:
@@ -842,7 +842,7 @@ timepos_t::shift_earlier (timecnt_t const & d)
 timepos_t &
 timepos_t:: shift_earlier (samplepos_t s)
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		break;
 	case BeatTime:
@@ -854,7 +854,7 @@ timepos_t:: shift_earlier (samplepos_t s)
 	}
 
 	_samplepos -= s;
-	_lock_status.set_dirty (Dirty (BBTDirty|BeatsDirty));
+	_domain_status.set_dirty (Dirty (BBTDirty|BeatsDirty));
 
 	return *this;
 }
@@ -862,7 +862,7 @@ timepos_t:: shift_earlier (samplepos_t s)
 timepos_t &
 timepos_t::shift_earlier (Temporal::Beats const & b)
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		update_music_times ();
 		break;
@@ -874,7 +874,7 @@ timepos_t::shift_earlier (Temporal::Beats const & b)
 	}
 
 	_beats -= b;
-	_lock_status.set_dirty (Dirty (BBTDirty|SampleDirty));
+	_domain_status.set_dirty (Dirty (BBTDirty|SampleDirty));
 
 	return *this;
 }
@@ -882,7 +882,7 @@ timepos_t::shift_earlier (Temporal::Beats const & b)
 timepos_t &
 timepos_t::shift_earlier (Temporal::BBT_Offset const & bbt)
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		update_music_times ();
 		break;
@@ -894,7 +894,7 @@ timepos_t::shift_earlier (Temporal::BBT_Offset const & bbt)
 	}
 
 	_bbt = _tempo_map->bbt_walk (_bbt, -bbt);
-	_lock_status.set_dirty (Dirty (SampleDirty|BeatsDirty));
+	_domain_status.set_dirty (Dirty (SampleDirty|BeatsDirty));
 
 	return *this;
 }
@@ -907,18 +907,18 @@ timepos_t:: operator+= (samplepos_t s)
 	/* do not switch time domains just because we added samples (AudioTime)
 	 */
 
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case BeatTime:
 		_tempo_map->update_one_domain_from_another (*this, &_samplepos, AudioTime);
 		_samplepos += s;
 		_tempo_map->update_one_domain_from_another (*this, &_beats, BeatTime);
-		_lock_status.set_dirty (BBTDirty);
+		_domain_status.set_dirty (BBTDirty);
 		break;
 	case BarTime:
 		_tempo_map->update_one_domain_from_another (*this, &_samplepos, AudioTime);
 		_samplepos += s;
 		_tempo_map->update_one_domain_from_another (*this, &_bbt, BarTime);
-		_lock_status.set_dirty (BeatsDirty);
+		_domain_status.set_dirty (BeatsDirty);
 		break;
 	case AudioTime:
 		_samplepos += s;
@@ -931,7 +931,7 @@ timepos_t:: operator+= (samplepos_t s)
 timepos_t &
 timepos_t::operator+=(Temporal::Beats const & b)
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		update_music_times (); /* XXX optimize for just Beats */
 		_beats += b;
@@ -953,7 +953,7 @@ timepos_t::operator+=(Temporal::Beats const & b)
 timepos_t &
 timepos_t:: operator+=(Temporal::BBT_Offset const & bbt)
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		update_music_times (); /* optimize for just BBT */
 		_bbt = _tempo_map->bbt_walk (_bbt, bbt);
@@ -1014,7 +1014,7 @@ std::operator<< (std::ostream & o, timepos_t const & tp)
 std::string
 timepos_t::to_string () const
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		return string_compose ("a%1", _samplepos);
 	case BeatTime:
@@ -1072,9 +1072,9 @@ timepos_t::string_to (std::string const & str)
 }
 
 void
-timepos_t::set_lock_style (TimeDomain ls)
+timepos_t::set_time_domain (TimeDomain ls)
 {
-	switch (_lock_status.style()) {
+	switch (_domain_status.style()) {
 	case AudioTime:
 		update_music_times ();
 		break;
@@ -1086,5 +1086,5 @@ timepos_t::set_lock_style (TimeDomain ls)
 		break;
 	}
 
-	_lock_status.set_style (ls);
+	_domain_status.set_style (ls);
 }

@@ -1244,7 +1244,7 @@ private:
 	void toggle_solo ();
 	void toggle_solo_isolate ();
 	void toggle_mute ();
-	void toggle_region_lock_style ();
+	void toggle_region_time_domain ();
 
 	enum LayerOperation {
 		Raise,
@@ -1709,7 +1709,7 @@ private:
 	void marker_menu_remove ();
 	void marker_menu_rename ();
 	void rename_marker (ArdourMarker *marker);
-	void toggle_marker_lock_style ();
+	void toggle_marker_time_domain ();
 	void toggle_tempo_clamped ();
 	void toggle_tempo_type ();
 	void ramp_to_next_tempo ();

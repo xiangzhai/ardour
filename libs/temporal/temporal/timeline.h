@@ -43,12 +43,12 @@ struct TemporalStyleException : public std::exception {
 	std::string s;
 };
 
-class LIBTEMPORAL_API PositionLockStatus
+class LIBTEMPORAL_API TimeDomainStatus
 {
   public:
-	PositionLockStatus () : _style (Temporal::AudioTime), _dirty (Temporal::Dirty (0)) {}
-	PositionLockStatus (Temporal::TimeDomain ls) : _style (ls), _dirty (Temporal::Dirty (0)) {}
-	PositionLockStatus (Temporal::TimeDomain ls, Temporal::Dirty d) : _style (ls), _dirty (Temporal::Dirty (d)) {}
+	TimeDomainStatus () : _style (Temporal::AudioTime), _dirty (Temporal::Dirty (0)) {}
+	TimeDomainStatus (Temporal::TimeDomain ls) : _style (ls), _dirty (Temporal::Dirty (0)) {}
+	TimeDomainStatus (Temporal::TimeDomain ls, Temporal::Dirty d) : _style (ls), _dirty (Temporal::Dirty (d)) {}
 
 	Temporal::TimeDomain style() const { return _style; }
 	Temporal::Dirty dirty() const { return _dirty; }
@@ -82,15 +82,15 @@ class LIBTEMPORAL_API timepos_t {
 	Temporal::Beats        beats() const;
 	Temporal::BBT_Time     bbt() const;
 
-	PositionLockStatus  lock_status() const { return _lock_status; }
-	Temporal::TimeDomain lock_style() const { return _lock_status.style(); }
-	void set_lock_style (Temporal::TimeDomain);
+	TimeDomainStatus  domain_status() const { return _domain_status; }
+	Temporal::TimeDomain time_domain() const { return _domain_status.style(); }
+	void set_time_domain (Temporal::TimeDomain);
 
 	/* return a timepos_t that is the next (later) possible position given
 	 * this one
 	 */
 	timepos_t increment () const {
-		switch (_lock_status.style()) {
+		switch (time_domain()) {
 		case Temporal::BeatTime:
 			return timepos_t (_beats + Beats (0, 1));
 		case Temporal::AudioTime:
@@ -107,7 +107,7 @@ class LIBTEMPORAL_API timepos_t {
 	 * this one
 	 */
 	timepos_t decrement () const {
-		switch (_lock_status.style()) {
+		switch (time_domain()) {
 		case Temporal::BeatTime:
 			return timepos_t (_beats - Beats (0, 1)); /* beats can go negative */
 		case Temporal::AudioTime:
@@ -122,15 +122,15 @@ class LIBTEMPORAL_API timepos_t {
 
 	/* these are not thread-safe. in fact, almost nothing in this class is. */
 	timepos_t & operator= (timecnt_t const & t); /* will throw() if val is negative */
-	timepos_t & operator= (samplepos_t s) { _lock_status.set_style (Temporal::AudioTime);  _lock_status.set_dirty (Temporal::Dirty (Temporal::BeatsDirty|Temporal::BBTDirty)); _samplepos = s; return *this; }
-	timepos_t & operator= (Temporal::Beats const & b) { _lock_status.set_style (Temporal::BeatTime);  _lock_status.set_dirty (Temporal::Dirty (Temporal::SampleDirty|Temporal::BBTDirty)); _beats = b; return *this; }
-	timepos_t & operator= (Temporal::BBT_Time const & bbt) { _lock_status.set_style (Temporal::BarTime);  _lock_status.set_dirty (Temporal::Dirty (Temporal::BeatsDirty|Temporal::SampleDirty)); _bbt = bbt; return *this; }
+	timepos_t & operator= (samplepos_t s) { _domain_status.set_style (Temporal::AudioTime);  _domain_status.set_dirty (Temporal::Dirty (Temporal::BeatsDirty|Temporal::BBTDirty)); _samplepos = s; return *this; }
+	timepos_t & operator= (Temporal::Beats const & b) { _domain_status.set_style (Temporal::BeatTime);  _domain_status.set_dirty (Temporal::Dirty (Temporal::SampleDirty|Temporal::BBTDirty)); _beats = b; return *this; }
+	timepos_t & operator= (Temporal::BBT_Time const & bbt) { _domain_status.set_style (Temporal::BarTime);  _domain_status.set_dirty (Temporal::Dirty (Temporal::BeatsDirty|Temporal::SampleDirty)); _bbt = bbt; return *this; }
 
 	bool operator==(timepos_t const & other) const {
-		if (_lock_status.style() != other.lock_status().style()) {
+		if (time_domain() != other.time_domain()) {
 			return false;
 		}
-		switch (_lock_status.style()) {
+		switch (time_domain()) {
 		case Temporal::AudioTime:
 			return _samplepos == other._samplepos;
 		case Temporal::BeatTime:
@@ -142,10 +142,10 @@ class LIBTEMPORAL_API timepos_t {
 	}
 
 	bool operator!=(timepos_t const & other) const {
-		if (_lock_status.style() != other.lock_status().style()) {
+		if (time_domain() != other.time_domain()) {
 			return true;
 		}
-		switch (_lock_status.style()) {
+		switch (time_domain()) {
 		case Temporal::AudioTime:
 			return _samplepos != other._samplepos;
 		case Temporal::BeatTime:
@@ -162,7 +162,7 @@ class LIBTEMPORAL_API timepos_t {
 	bool operator>= (timecnt_t const & other) const;
 
 	bool operator< (timepos_t const & other) const {
-		switch (_lock_status.style()) {
+		switch (time_domain()) {
 		case Temporal::AudioTime:
 			return _samplepos < other.sample();
 		case Temporal::BeatTime:
@@ -174,7 +174,7 @@ class LIBTEMPORAL_API timepos_t {
 	}
 
 	bool operator> (timepos_t const & other) const {
-		switch (_lock_status.style()) {
+		switch (time_domain()) {
 		case Temporal::AudioTime:
 			return _samplepos > other.sample();
 		case Temporal::BeatTime:
@@ -186,7 +186,7 @@ class LIBTEMPORAL_API timepos_t {
 	}
 
 	bool operator<= (timepos_t const & other) const {
-		switch (_lock_status.style()) {
+		switch (time_domain()) {
 		case Temporal::AudioTime:
 			return _samplepos <= other.sample();
 		case Temporal::BeatTime:
@@ -198,7 +198,7 @@ class LIBTEMPORAL_API timepos_t {
 	}
 
 	bool operator>= (timepos_t const & other) const {
-		switch (_lock_status.style()) {
+		switch (time_domain()) {
 		case Temporal::AudioTime:
 			return _samplepos >= other.sample();
 		case Temporal::BeatTime:
@@ -328,7 +328,7 @@ class LIBTEMPORAL_API timepos_t {
 
   private:
 	mutable int         update_generation;
-	PositionLockStatus _lock_status;
+	TimeDomainStatus _domain_status;
 
 	/* these are mutable because we may need to update them at arbitrary
 	   times, even within contexts that are otherwise const. For example, an
@@ -347,7 +347,7 @@ class LIBTEMPORAL_API timepos_t {
 	void update_audio_time ();
 
 	/* special constructor for max_timepos */
-	timepos_t (PositionLockStatus);
+	timepos_t (TimeDomainStatus);
 	static timepos_t _max_timepos;
 
 };

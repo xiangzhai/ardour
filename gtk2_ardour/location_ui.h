@@ -142,7 +142,7 @@ protected:
 	void location_changed ();
 	void flags_changed ();
 	void lock_changed ();
-	void position_lock_style_changed ();
+	void position_time_domain_changed ();
 
 	void set_clock_editable_status ();
 	void show_cd_track_details ();

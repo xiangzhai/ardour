@@ -73,7 +73,7 @@ namespace ARDOUR {
 		PBD::PropertyDescriptor<timecnt_t> ancestral_length;
 		PBD::PropertyDescriptor<float> stretch;
 		PBD::PropertyDescriptor<float> shift;
-		PBD::PropertyDescriptor<Temporal::TimeDomain> position_lock_style;
+		PBD::PropertyDescriptor<Temporal::TimeDomain> position_time_domain;
 		PBD::PropertyDescriptor<uint64_t> layering_index;
 	}
 }
@@ -528,15 +528,15 @@ Region::special_set_position (timepos_t const & pos)
 }
 
 void
-Region::set_position_lock_style (Temporal::TimeDomain ps)
+Region::set_position_time_domain (Temporal::TimeDomain ps)
 {
-	if (_position.val().lock_style() != ps) {
+	if (_position.val().time_domain() != ps) {
 
 		boost::shared_ptr<Playlist> pl (playlist());
 
-		_position.call().set_lock_style (ps);
+		_position.call().set_time_domain (ps);
 
-		send_change (Properties::position_lock_style);
+		send_change (Properties::position_time_domain);
 	}
 }
 
@@ -549,7 +549,7 @@ Region::update_after_tempo_map_change (bool send)
 		return;
 	}
 
-	if (_position.val().lock_style() == Temporal::AudioTime) {
+	if (_position.val().time_domain() == Temporal::AudioTime) {
 		return;
 	}
 
@@ -589,7 +589,7 @@ Region::set_position (timepos_t const & pos)
 	 * given that we already are notifying about position change.
 	 */
 
-	if (_position.val().lock_style() != Temporal::AudioTime) {
+	if (_position.val().time_domain() != Temporal::AudioTime) {
 		p_and_l.add (Properties::length);
 	}
 
@@ -1841,13 +1841,13 @@ Region::latest_possible_sample () const
 }
 
 Temporal::TimeDomain
-Region::position_lock_style() const
+Region::position_time_domain() const
 {
-	return _position.val().lock_style();
+	return _position.val().time_domain();
 }
 
 void
-Region::recompute_position_from_lock_style ()
+Region::recompute_position_from_time_domain ()
 {
 	/* XXX currently do nothing, but if we wanted to reduce lazy evaluation
 	 * of timepos_t non-canonical values, we could possibly do it here.

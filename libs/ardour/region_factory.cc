@@ -83,8 +83,8 @@ RegionFactory::create (boost::shared_ptr<const Region> region, bool announce, bo
 	if (ret) {
 		ret->set_name (new_region_name(ret->name()));
 
-		if (ret->session().config.get_glue_new_regions_to_bars_and_beats() && ret->position_lock_style() == Temporal::AudioTime) {
-			ret->set_position_lock_style (Temporal::BeatTime);
+		if (ret->session().config.get_glue_new_regions_to_bars_and_beats() && ret->position_time_domain() == Temporal::AudioTime) {
+			ret->set_position_time_domain (Temporal::BeatTime);
 		}
 
 		/* pure copy constructor - no property list */
@@ -125,8 +125,8 @@ RegionFactory::create (boost::shared_ptr<Region> region, const PropertyList& pli
 	if (ret) {
 		ret->apply_changes (plist);
 
-		if (ret->session().config.get_glue_new_regions_to_bars_and_beats() && ret->position_lock_style() == Temporal::AudioTime) {
-			ret->set_position_lock_style (Temporal::BeatTime);
+		if (ret->session().config.get_glue_new_regions_to_bars_and_beats() && ret->position_time_domain() == Temporal::AudioTime) {
+			ret->set_position_time_domain (Temporal::BeatTime);
 		}
 
 		if (announce) {
@@ -166,8 +166,8 @@ RegionFactory::create (boost::shared_ptr<Region> region, timecnt_t const & offse
 	if (ret) {
 		ret->apply_changes (plist);
 
-		if (ret->session().config.get_glue_new_regions_to_bars_and_beats() && ret->position_lock_style() == Temporal::AudioTime) {
-			ret->set_position_lock_style (Temporal::BeatTime);
+		if (ret->session().config.get_glue_new_regions_to_bars_and_beats() && ret->position_time_domain() == Temporal::AudioTime) {
+			ret->set_position_time_domain (Temporal::BeatTime);
 		}
 
 		if (announce) {
@@ -207,8 +207,8 @@ RegionFactory::create (boost::shared_ptr<Region> region, const SourceList& srcs,
 	if (ret) {
 		ret->apply_changes (plist);
 
-		if (ret->session().config.get_glue_new_regions_to_bars_and_beats() && ret->position_lock_style() == Temporal::AudioTime) {
-			ret->set_position_lock_style (Temporal::BeatTime);
+		if (ret->session().config.get_glue_new_regions_to_bars_and_beats() && ret->position_time_domain() == Temporal::AudioTime) {
+			ret->set_position_time_domain (Temporal::BeatTime);
 		}
 
 		if (announce) {
@@ -251,8 +251,8 @@ RegionFactory::create (const SourceList& srcs, const PropertyList& plist, bool a
 	if (ret) {
 		ret->apply_changes (plist);
 
-		if (ret->session().config.get_glue_new_regions_to_bars_and_beats() && ret->position_lock_style() == Temporal::AudioTime) {
-			ret->set_position_lock_style (Temporal::BeatTime);
+		if (ret->session().config.get_glue_new_regions_to_bars_and_beats() && ret->position_time_domain() == Temporal::AudioTime) {
+			ret->set_position_time_domain (Temporal::BeatTime);
 		}
 
 		if (announce) {
@@ -298,7 +298,7 @@ RegionFactory::create (SourceList& srcs, const XMLNode& node)
 		} else {
 			map_add (ret);
 
-			/* Don't fiddle with position_lock_style here as the region
+			/* Don't fiddle with position_time_domain here as the region
 			   description is coming from XML.
 			*/
 

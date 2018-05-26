@@ -167,7 +167,7 @@ Editor::add_new_location_internal (Location* location)
 	}
 
 	location->name_changed.connect (*this, invalidator (*this), boost::bind (&Editor::location_changed, this, _1), gui_context());
-	location->position_lock_style_changed.connect (*this, invalidator (*this), boost::bind (&Editor::location_changed, this, _1), gui_context());
+	location->position_time_domain_changed.connect (*this, invalidator (*this), boost::bind (&Editor::location_changed, this, _1), gui_context());
 	location->FlagsChanged.connect (*this, invalidator (*this), boost::bind (&Editor::location_flags_changed, this, location), gui_context());
 
 	pair<Location*,LocationMarkers*> newpair;
@@ -208,7 +208,7 @@ Editor::location_changed (Location *location)
 		return;
 	}
 
-	if (location->position_lock_style() != Temporal::AudioTime) {
+	if (location->position_time_domain() != Temporal::AudioTime) {
 		lam->set_name ("\u266B" + location->name ()); // BEAMED EIGHTH NOTES
 	} else {
 		lam->set_name (location->name ());
@@ -925,7 +925,7 @@ Editor::build_marker_menu (Location* loc)
 
 	items.push_back (CheckMenuElem (_("Glue to Bars and Beats")));
 	Gtk::CheckMenuItem* glue_item = static_cast<Gtk::CheckMenuItem*> (&items.back());
-	glue_item->set_active (loc->position_lock_style() != Temporal::AudioTime);
+	glue_item->set_active (loc->position_time_domain() != Temporal::AudioTime);
 
 	glue_item->signal_activate().connect (sigc::mem_fun (*this, &Editor::toggle_marker_menu_glue));
 
@@ -965,7 +965,7 @@ Editor::build_range_marker_menu (Location* loc, bool loop_or_punch, bool session
 	items.push_back (CheckMenuElem (_("Glue to Bars and Beats")));
 
 	Gtk::CheckMenuItem* glue_item = static_cast<Gtk::CheckMenuItem*> (&items.back());
-	glue_item->set_active (loc->position_lock_style() != Temporal::AudioTime);
+	glue_item->set_active (loc->position_time_domain() != Temporal::AudioTime);
 	glue_item->signal_activate().connect (sigc::mem_fun (*this, &Editor::toggle_marker_menu_glue));
 
 	items.push_back (SeparatorElem());
@@ -1711,10 +1711,10 @@ Editor::toggle_marker_menu_glue ()
 	begin_reversible_command (_("change marker lock style"));
 	XMLNode &before = _session->locations()->get_state();
 
-	if (loc->position_lock_style() != Temporal::AudioTime) {
-		loc->set_position_lock_style (Temporal::AudioTime);
+	if (loc->position_time_domain() != Temporal::AudioTime) {
+		loc->set_position_time_domain (Temporal::AudioTime);
 	} else {
-		loc->set_position_lock_style (Temporal::BarTime);
+		loc->set_position_time_domain (Temporal::BarTime);
 	}
 
 	XMLNode &after = _session->locations()->get_state();

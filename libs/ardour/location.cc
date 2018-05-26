@@ -54,7 +54,7 @@ PBD::Signal1<void,Location*> Location::end_changed;
 PBD::Signal1<void,Location*> Location::start_changed;
 PBD::Signal1<void,Location*> Location::flags_changed;
 PBD::Signal1<void,Location*> Location::lock_changed;
-PBD::Signal1<void,Location*> Location::position_lock_style_changed;
+PBD::Signal1<void,Location*> Location::position_time_domain_changed;
 PBD::Signal1<void,Location*> Location::changed;
 
 Location::Location (Session& s)
@@ -78,8 +78,8 @@ Location::Location (Session& s, Temporal::timepos_t const & start, Temporal::tim
 	assert (_start >= 0);
 	assert (_end >= 0);
 
-	_start.lock_status().set_style (s.config.get_glue_new_markers_to_bars_and_beats() ? BeatTime : start.lock_style());
-	_end.lock_status().set_style (s.config.get_glue_new_markers_to_bars_and_beats() ? BeatTime : end.lock_style());
+	_start.set_time_domain (s.config.get_glue_new_markers_to_bars_and_beats() ? BeatTime : start.time_domain());
+	_end.set_time_domain (s.config.get_glue_new_markers_to_bars_and_beats() ? BeatTime : end.time_domain());
 }
 
 Location::Location (const Location& other)
@@ -101,10 +101,10 @@ Location::Location (Session& s, const XMLNode& node)
 	: SessionHandleRef (s)
 	, _flags (Flags (0))
 {
-	//_start.lock_status().set_style (AudioTime);
-	//_end.lock_status().set_style (AudioTime);
+	//_start.set_time_domain (AudioTime);
+	//_end.set_time_domain (AudioTime);
 
-	/* Note: _position_lock_style is initialised above in case set_state doesn't set it
+	/* Note: _position_time_domain is initialised above in case set_state doesn't set it
 	   (for 2.X session file compatibility).
 	*/
 
@@ -657,15 +657,15 @@ Location::set_state (const XMLNode& node, int version)
 }
 
 void
-Location::set_position_lock_style (TimeDomain ps)
+Location::set_position_time_domain (TimeDomain ps)
 {
-	if (_start.lock_style() == ps) {
+	if (_start.time_domain() == ps) {
 		return;
 	}
 
-	_start.set_lock_style (ps);
+	_start.set_time_domain (ps);
 
-	position_lock_style_changed (this); /* EMIT SIGNAL */
+	position_time_domain_changed (this); /* EMIT SIGNAL */
 	TimeDomainChanged (); /* EMIT SIGNAL */
 }
 

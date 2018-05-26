@@ -245,7 +245,7 @@ LocationEditRow::set_location (Location *loc)
 	}
 	hide_check_button.set_active (location->is_hidden());
 	lock_check_button.set_active (location->locked());
-	glue_check_button.set_active (location->position_lock_style() != Temporal::AudioTime);
+	glue_check_button.set_active (location->position_time_domain() != Temporal::AudioTime);
 
 	if (location->is_auto_loop() || location-> is_auto_punch()) {
 		// use label instead of entry
@@ -346,7 +346,7 @@ LocationEditRow::set_location (Location *loc)
 	location->Changed.connect (connections, invalidator (*this), boost::bind (&LocationEditRow::location_changed, this), gui_context());
 	location->FlagsChanged.connect (connections, invalidator (*this), boost::bind (&LocationEditRow::flags_changed, this), gui_context());
 	location->LockChanged.connect (connections, invalidator (*this), boost::bind (&LocationEditRow::lock_changed, this), gui_context());
-	location->TimeDomainChanged.connect (connections, invalidator (*this), boost::bind (&LocationEditRow::position_lock_style_changed, this), gui_context());
+	location->TimeDomainChanged.connect (connections, invalidator (*this), boost::bind (&LocationEditRow::position_time_domain_changed, this), gui_context());
 }
 
 void
@@ -571,10 +571,10 @@ LocationEditRow::glue_toggled ()
 		return;
 	}
 
-	if (location->position_lock_style() == Temporal::AudioTime) {
-		location->set_position_lock_style (Temporal::BarTime);
+	if (location->position_time_domain() == Temporal::AudioTime) {
+		location->set_position_time_domain (Temporal::BarTime);
 	} else {
-		location->set_position_lock_style (Temporal::AudioTime);
+		location->set_position_time_domain (Temporal::AudioTime);
 	}
 }
 
@@ -694,7 +694,7 @@ LocationEditRow::flags_changed ()
 
 	cd_check_button.set_active (location->is_cd_marker());
 	hide_check_button.set_active (location->is_hidden());
-	glue_check_button.set_active (location->position_lock_style() != Temporal::AudioTime);
+	glue_check_button.set_active (location->position_time_domain() != Temporal::AudioTime);
 
 	i_am_the_modifier--;
 }
@@ -716,7 +716,7 @@ LocationEditRow::lock_changed ()
 }
 
 void
-LocationEditRow::position_lock_style_changed ()
+LocationEditRow::position_time_domain_changed ()
 {
 	if (!location) {
 		return;
@@ -724,7 +724,7 @@ LocationEditRow::position_lock_style_changed ()
 
 	i_am_the_modifier++;
 
-	glue_check_button.set_active (location->position_lock_style() != Temporal::AudioTime);
+	glue_check_button.set_active (location->position_time_domain() != Temporal::AudioTime);
 
 	i_am_the_modifier--;
 }

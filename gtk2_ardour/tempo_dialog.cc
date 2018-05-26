@@ -144,20 +144,20 @@ TempoDialog::init (const Temporal::BBT_Time& when, double bpm, double end_bpm, d
 
 	strings.clear();
 
-	lock_styles.insert (make_pair (_("music"), BeatTime));
+	time_domains.insert (make_pair (_("music"), BeatTime));
 	strings.push_back (_("music"));
-	lock_styles.insert (make_pair (_("audio"), AudioTime));
+	time_domains.insert (make_pair (_("audio"), AudioTime));
 	strings.push_back (_("audio"));
-	set_popdown_strings (lock_style, strings);
+	set_popdown_strings (time_domain, strings);
 	TimeDomains::iterator ls;
-	for (ls = lock_styles.begin(); ls != lock_styles.end(); ++ls) {
+	for (ls = time_domains.begin(); ls != time_domains.end(); ++ls) {
 		if (ls->second == style) {
-			lock_style.set_active_text (ls->first);
+			time_domain.set_active_text (ls->first);
 			break;
 		}
 	}
-	if (ls == lock_styles.end()) {
-		lock_style.set_active_text (strings[0]); // "music"
+	if (ls == time_domains.end()) {
+		time_domain.set_active_text (strings[0]); // "music"
 	}
 
 	Table* table;
@@ -223,9 +223,9 @@ TempoDialog::init (const Temporal::BBT_Time& when, double bpm, double end_bpm, d
 		++row;
 		++row;
 
-		Label* lock_style_label = manage (new Label(_("Lock Style:"), ALIGN_LEFT, ALIGN_CENTER));
-		table->attach (*lock_style_label, 0, 1, row, row + 1);
-		table->attach (lock_style, 1, 5, row, row + 1);
+		Label* time_domain_label = manage (new Label(_("Lock Style:"), ALIGN_LEFT, ALIGN_CENTER));
+		table->attach (*time_domain_label, 0, 1, row, row + 1);
+		table->attach (time_domain, 1, 5, row, row + 1);
 
 		--row;
 	}
@@ -261,7 +261,7 @@ TempoDialog::init (const Temporal::BBT_Time& when, double bpm, double end_bpm, d
 	when_beat_entry.signal_key_release_event().connect (sigc::mem_fun (*this, &TempoDialog::entry_key_release), false);
 	pulse_selector.signal_changed().connect (sigc::mem_fun (*this, &TempoDialog::pulse_change));
 	tempo_type.signal_changed().connect (sigc::mem_fun (*this, &TempoDialog::tempo_type_change));
-	lock_style.signal_changed().connect (sigc::mem_fun (*this, &TempoDialog::lock_style_change));
+	time_domain.signal_changed().connect (sigc::mem_fun (*this, &TempoDialog::time_domain_change));
 	tap_tempo_button.signal_button_press_event().connect (sigc::mem_fun (*this, &TempoDialog::tap_tempo_button_press), false);
 	tap_tempo_button.signal_key_press_event().connect (sigc::mem_fun (*this, &TempoDialog::tap_tempo_key_press), false);
 	tap_tempo_button.signal_focus_out_event().connect (sigc::mem_fun (*this, &TempoDialog::tap_tempo_focus_out));
@@ -371,12 +371,12 @@ TempoDialog::get_tempo_type ()
 }
 
 Temporal::TimeDomain
-TempoDialog::get_lock_style ()
+TempoDialog::get_time_domain ()
 {
-	TimeDomains::iterator x = lock_styles.find (lock_style.get_active_text());
+	TimeDomains::iterator x = time_domains.find (time_domain.get_active_text());
 
-	if (x == lock_styles.end()) {
-		error << string_compose(_("incomprehensible lock style (%1)"), lock_style.get_active_text()) << endmsg;
+	if (x == time_domains.end()) {
+		error << string_compose(_("incomprehensible lock style (%1)"), time_domain.get_active_text()) << endmsg;
 		return BeatTime;
 	}
 
@@ -404,7 +404,7 @@ TempoDialog::tempo_type_change ()
 }
 
 void
-TempoDialog::lock_style_change ()
+TempoDialog::time_domain_change ()
 {
 	set_response_sensitive (RESPONSE_ACCEPT, is_user_input_valid());
 }
@@ -534,20 +534,20 @@ MeterDialog::init (const Temporal::BBT_Time& when, double bpb, double divisor, b
 
 	strings.clear();
 
-	lock_styles.insert (make_pair (_("music"), BarTime));
+	time_domains.insert (make_pair (_("music"), BarTime));
 	strings.push_back (_("music"));
-	lock_styles.insert (make_pair (_("audio"), AudioTime));
+	time_domains.insert (make_pair (_("audio"), AudioTime));
 	strings.push_back (_("audio"));
-	set_popdown_strings (lock_style, strings);
+	set_popdown_strings (time_domain, strings);
 	TimeDomains::iterator ls;
-	for (ls = lock_styles.begin(); ls != lock_styles.end(); ++ls) {
+	for (ls = time_domains.begin(); ls != time_domains.end(); ++ls) {
 		if (ls->second == style) {
-			lock_style.set_active_text (ls->first);
+			time_domain.set_active_text (ls->first);
 			break;
 		}
 	}
-	if (ls == lock_styles.end()) {
-		lock_style.set_active_text (strings[0]); // "music"
+	if (ls == time_domains.end()) {
+		time_domain.set_active_text (strings[0]); // "music"
 	}
 
 	Label* note_label = manage (new Label (_("Note value:"), ALIGN_RIGHT, ALIGN_CENTER));
@@ -572,7 +572,7 @@ MeterDialog::init (const Temporal::BBT_Time& when, double bpb, double divisor, b
 		table->attach (when_bar_entry, 1, 2, 2, 3, FILL | EXPAND, FILL | EXPAND);
 
 		table->attach (*lock_label, 0, 1, 3, 4, FILL|EXPAND, FILL|EXPAND);
-		table->attach (lock_style, 1, 2, 3, 4, FILL|EXPAND, SHRINK);
+		table->attach (time_domain, 1, 2, 3, 4, FILL|EXPAND, SHRINK);
 	}
 
 	get_vbox()->set_border_width (12);
@@ -593,7 +593,7 @@ MeterDialog::init (const Temporal::BBT_Time& when, double bpb, double divisor, b
 	when_bar_entry.signal_key_press_event().connect (sigc::mem_fun (*this, &MeterDialog::entry_key_press), false);
 	when_bar_entry.signal_key_release_event().connect (sigc::mem_fun (*this, &MeterDialog::entry_key_release));
 	note_type.signal_changed().connect (sigc::mem_fun (*this, &MeterDialog::note_type_change));
-	lock_style.signal_changed().connect (sigc::mem_fun (*this, &MeterDialog::lock_style_change));
+	time_domain.signal_changed().connect (sigc::mem_fun (*this, &MeterDialog::time_domain_change));
 
 }
 
@@ -667,7 +667,7 @@ MeterDialog::note_type_change ()
 }
 
 void
-MeterDialog::lock_style_change ()
+MeterDialog::time_domain_change ()
 {
 	set_response_sensitive (RESPONSE_ACCEPT, is_user_input_valid());
 }
@@ -698,12 +698,12 @@ MeterDialog::get_note_type ()
 }
 
 Temporal::TimeDomain
-MeterDialog::get_lock_style ()
+MeterDialog::get_time_domain ()
 {
-	TimeDomains::iterator x = lock_styles.find (lock_style.get_active_text());
+	TimeDomains::iterator x = time_domains.find (time_domain.get_active_text());
 
-	if (x == lock_styles.end()) {
-		error << string_compose(_("incomprehensible meter lock style (%1)"), lock_style.get_active_text()) << endmsg;
+	if (x == time_domains.end()) {
+		error << string_compose(_("incomprehensible meter lock style (%1)"), time_domain.get_active_text()) << endmsg;
 		return BarTime;
 	}
 

@@ -380,7 +380,7 @@ RegionView::region_changed (const PropertyChange& what_changed)
 	if (what_changed.contains (ARDOUR::Properties::name)) {
 		region_renamed ();
 	}
-	if (what_changed.contains (ARDOUR::Properties::position_lock_style)) {
+	if (what_changed.contains (ARDOUR::Properties::position_time_domain)) {
 		region_renamed ();
 	}
 	if (what_changed.contains (ARDOUR::Properties::sync_position)) {
@@ -565,7 +565,7 @@ RegionView::make_name () const
 	std::string str;
 
 	// XXX nice to have some good icons for this
-	if (_region->position_lock_style() != Temporal::AudioTime) {
+	if (_region->position_time_domain() != Temporal::AudioTime) {
 		str += "\u266B"; // BEAMED EIGHTH NOTES
 	}
 

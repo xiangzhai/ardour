@@ -124,7 +124,7 @@ class LIBARDOUR_API Location : public SessionHandleRef, public PBD::StatefulDest
 	static PBD::Signal1<void,Location*> start_changed;
 	static PBD::Signal1<void,Location*> flags_changed;
 	static PBD::Signal1<void,Location*> lock_changed;
-	static PBD::Signal1<void,Location*> position_lock_style_changed;
+	static PBD::Signal1<void,Location*> position_time_domain_changed;
 
 	/* this is sent only when both start and end change at the same time */
 	static PBD::Signal1<void,Location*> changed;
@@ -150,8 +150,8 @@ class LIBARDOUR_API Location : public SessionHandleRef, public PBD::StatefulDest
 	XMLNode& get_state (void);
 	int set_state (const XMLNode&, int version);
 
-	Temporal::TimeDomain position_lock_style() const { return _start.lock_style(); }
-	void set_position_lock_style (Temporal::TimeDomain ps);
+	Temporal::TimeDomain position_time_domain() const { return _start.time_domain(); }
+	void set_position_time_domain (Temporal::TimeDomain ps);
 
 	static PBD::Signal0<void> scene_changed; /* for use by backend scene change management, class level */
         PBD::Signal0<void> SceneChangeChanged;   /* for use by objects interested in this object */

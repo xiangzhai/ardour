@@ -60,7 +60,7 @@
 #include "pbd/i18n.h"
 #include <locale.h>
 
-#define ASSERT_AUDIO_TIME_LOCK() assert (_position.val().lock_style() == Temporal::AudioTime)
+#define ASSERT_AUDIO_TIME_LOCK() assert (_position.val().time_domain() == Temporal::AudioTime)
 
 using namespace std;
 using namespace ARDOUR;

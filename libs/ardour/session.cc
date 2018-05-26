@@ -6076,8 +6076,8 @@ Session::write_one_track (Track& track, Temporal::timepos_t const & tstart, Temp
 	   the amount of data to process, which reflects the fact that even
 	   MidiBuffers are sized based on samples.
 	*/
-	assert (tstart.lock_style() == Temporal::AudioTime);
-	assert (tend.lock_style() == Temporal::AudioTime);
+	assert (tstart.time_domain() == Temporal::AudioTime);
+	assert (tend.time_domain() == Temporal::AudioTime);
 
 	samplepos_t start = tstart.sample();
 	samplepos_t end = tend.sample();

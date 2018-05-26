@@ -5818,7 +5818,7 @@ Editor::toggle_region_video_lock ()
 }
 
 void
-Editor::toggle_region_lock_style ()
+Editor::toggle_region_time_domain()
 {
 	if (_ignore_region_action) {
 		return;
@@ -5840,8 +5840,8 @@ Editor::toggle_region_lock_style ()
 
 	for (RegionSelection::iterator i = rs.begin(); i != rs.end(); ++i) {
 		(*i)->region()->clear_changes ();
-		Temporal::TimeDomain const ns = ((*i)->region()->position_lock_style() == Temporal::AudioTime && !cmi->get_inconsistent()) ? Temporal::BeatTime : Temporal::AudioTime;
-		(*i)->region()->set_position_lock_style (ns);
+		Temporal::TimeDomain const ns = ((*i)->region()->position_time_domain() == Temporal::AudioTime && !cmi->get_inconsistent()) ? Temporal::BeatTime : Temporal::AudioTime;
+		(*i)->region()->set_position_time_domain (ns);
 		_session->add_command (new StatefulDiffCommand ((*i)->region()));
 	}
 
@@ -7674,7 +7674,7 @@ Editor::insert_time (timepos_t const & pos, timecnt_t const & duration, InsertTi
 
 			Locations::LocationList::const_iterator tmp;
 
-			if ((*i)->position_lock_style() == Temporal::AudioTime || glued_markers_too) {
+			if ((*i)->position_time_domain() == Temporal::AudioTime || glued_markers_too) {
 				bool const was_locked = (*i)->locked ();
 				if (locked_markers_too) {
 					(*i)->unlock ();
@@ -7810,7 +7810,7 @@ Editor::remove_time (timepos_t const & pos, timecnt_t const & duration, InsertTi
 		const timepos_t end = pos + duration;
 
 		for (Locations::LocationList::iterator i = copy.begin(); i != copy.end(); ++i) {
-			if ((*i)->position_lock_style() == Temporal::AudioTime || glued_markers_too) {
+			if ((*i)->position_time_domain() == Temporal::AudioTime || glued_markers_too) {
 
 				bool const was_locked = (*i)->locked ();
 				if (locked_markers_too) {

@@ -1346,7 +1346,7 @@ RegionMotionDrag::motion (GdkEvent* event, bool first_move)
 		}
 
 		/* Now move the region view */
-		if (rv->region()->position_lock_style() != Temporal::AudioTime) {
+		if (rv->region()->position_time_domain() != Temporal::AudioTime) {
 			Temporal::Beats const last_qn = tmap.quarter_note_at (rv->get_position().sample());
 			rv->set_position (timepos_t (last_qn + qn_delta), 0);
 			rv->move (0, y_delta);
@@ -1676,7 +1676,7 @@ RegionMoveDrag::finished_copy (bool const changed_position, bool const /*changed
 			if (i->view == _primary && !_x_constrained) {
 				new_view = insert_region_into_playlist (i->view->region(), dest_rtv, i->layer, last_position, modified_playlists, true);
 			} else {
-				if (i->view->region()->position_lock_style() == Temporal::AudioTime) {
+				if (i->view->region()->position_time_domain() == Temporal::AudioTime) {
 					new_view = insert_region_into_playlist (i->view->region(), dest_rtv, i->layer, where, modified_playlists, false);
 				} else {
 					new_view = insert_region_into_playlist (i->view->region(), dest_rtv, i->layer, where,  modified_playlists, true);
@@ -1794,7 +1794,7 @@ RegionMoveDrag::finished_no_copy (
 				new_view = insert_region_into_playlist (
 					RegionFactory::create (rv->region (), true), dest_rtv, dest_layer, last_position, modified_playlists, true);
 			} else {
-				if (rv->region()->position_lock_style() == Temporal::AudioTime) {
+				if (rv->region()->position_time_domain() == Temporal::AudioTime) {
 
 					new_view = insert_region_into_playlist (
 						RegionFactory::create (rv->region (), true), dest_rtv, dest_layer, where, modified_playlists, false);

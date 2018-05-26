@@ -1395,7 +1395,7 @@ Playlist::duplicate_ranges (std::list<TimelineRange>& ranges, float times)
 		    has to be done separately.
 		 */
 
-		 if (!ignore_music_glue && (*r)->position_lock_style() != Temporal::AudioTime) {
+		 if (!ignore_music_glue && (*r)->position_time_domain() != Temporal::AudioTime) {
 			 fixup.push_back (*r);
 			 continue;
 		 }
@@ -1405,7 +1405,7 @@ Playlist::duplicate_ranges (std::list<TimelineRange>& ranges, float times)
 
 	 /* XXX: may not be necessary; Region::post_set should do this, I think */
 	 for (RegionList::iterator r = fixup.begin(); r != fixup.end(); ++r) {
-		 (*r)->recompute_position_from_lock_style ();
+		 (*r)->recompute_position_from_time_domain ();
 	 }
  }
 
