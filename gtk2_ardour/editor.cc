@@ -1399,7 +1399,7 @@ Editor::set_session (Session *t)
 	_session->RouteAdded.connect (_session_connections, invalidator (*this), boost::bind (&Editor::add_routes, this, _1), gui_context());
 	_session->DirtyChanged.connect (_session_connections, invalidator (*this), boost::bind (&Editor::update_title, this), gui_context());
 	_session->tempo_map().PropertyChanged.connect (_session_connections, invalidator (*this), boost::bind (&Editor::tempo_map_property_changed, this, _1), gui_context());
-	_session->tempo_map().Changed.connect (_session_connections, invalidator (*this), boost::bind (&Editor::tempo_map_changed, this, _1, _2), gui_context());
+	_session->tempo_map().Changed.connect (_session_connections, invalidator (*this), boost::bind (&Editor::tempo_map_changed, this), gui_context());
 	_session->Located.connect (_session_connections, invalidator (*this), boost::bind (&Editor::located, this), gui_context());
 	_session->config.ParameterChanged.connect (_session_connections, invalidator (*this), boost::bind (&Editor::parameter_changed, this, _1), gui_context());
 	_session->StateSaved.connect (_session_connections, invalidator (*this), boost::bind (&Editor::session_state_saved, this, _1), gui_context());
@@ -1416,7 +1416,7 @@ Editor::set_session (Session *t)
 
 	restore_ruler_visibility ();
 	//tempo_map_changed (PropertyChange (0));
-	_session->tempo_map().apply_with_points (*this, &Editor::draw_metric_marks);
+	_session->tempo_map().apply_with_metrics (*this, &Editor::draw_metric_marks);
 
 	for (TrackViewList::iterator i = track_views.begin(); i != track_views.end(); ++i) {
 		(static_cast<TimeAxisView*>(*i))->set_samples_per_pixel (samples_per_pixel);
@@ -4143,11 +4143,11 @@ Editor::get_grid_type_as_beats (bool& success, timepos_t const & position) const
 
 	switch (_snap_type) {
 	case SnapToBeat:
-		return Beats::ticks ((4 * Temporal::ticks_per_beat) / _session->tempo_map().meter_at (position).note_value());
+		return Beats::ticks ((4 * Temporal::ticks_per_beat) / _session->tempo_map().metric_at (position).note_value());
 
 	case SnapToBar:
 		if (_session) {
-			const Meter& m = _session->tempo_map().meter_at (position);
+			const TempoMetric& m = _session->tempo_map().metric_at (position);
 			return Beats::from_double ((4.0 * m.divisions_per_bar()) / m.note_value());
 		}
 		break;

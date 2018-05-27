@@ -59,7 +59,7 @@ struct LIBTEMPORAL_API BBT_Time
 
 	BBT_Time () : bars (1), beats (1), ticks (0) {}
 	BBT_Time (int32_t ba, uint32_t be, uint32_t t) : bars (ba), beats (be), ticks (t) {
-		if (!bars || !beats || (ticks >= ticks_per_beat)) {
+		if (!bars || !beats) {
 			throw IllegalBBTTimeException();
 		}
 	}

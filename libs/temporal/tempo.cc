@@ -190,8 +190,19 @@ Meter::bbt_add (Temporal::BBT_Time const & bbt, Temporal::BBT_Offset const & add
 	const int32_t tpg = ticks_per_grid ();
 
 	if (r.ticks >= tpg) {
-		r.beats += r.ticks / tpg;
-		r.ticks %= tpg;
+
+		/* ticks per bar */
+		const int32_t tpb = tpg * _divisions_per_bar;
+
+		if (r.ticks >= tpb) {
+			r.bars += r.ticks / tpb;
+			r.ticks %= tpb;
+		}
+
+		if (r.ticks >= tpg) {
+			r.beats += r.ticks / tpg;
+			r.ticks %= tpg;
+		}
 	}
 
 	if (r.beats > _divisions_per_bar) {
@@ -200,7 +211,7 @@ Meter::bbt_add (Temporal::BBT_Time const & bbt, Temporal::BBT_Offset const & add
 
 		r.beats -= 1;
 		r.bars += r.beats / _divisions_per_bar;
-		r.beats = r.beats % _divisions_per_bar;
+		r.beats %= _divisions_per_bar;
 
 		/* adjust back */
 
@@ -538,8 +549,13 @@ MeterPoint::get_state () const
 Temporal::BBT_Time
 TempoMetric::bbt_at (superclock_t sc) const
 {
-	const superclock_t sc_delta = sc - _meter->sclock();
-	return _meter->bbt_add (_meter->bbt(), Temporal::BBT_Offset (0, 0, (sc - _meter->sclock()) / superclocks_per_ppqn()));
+	if (_tempo->sclock() > _meter->sclock()) {
+		const superclock_t sc_delta = sc - _tempo->sclock();
+		return _meter->bbt_add (_tempo->bbt(), Temporal::BBT_Offset (0, 0, sc_delta / superclocks_per_ppqn()));
+	} else {
+		const superclock_t sc_delta = sc - _meter->sclock();
+		return _meter->bbt_add (_meter->bbt(), Temporal::BBT_Offset (0, 0, sc_delta / superclocks_per_ppqn()));
+	}
 }
 
 superclock_t
@@ -591,8 +607,6 @@ TempoMap::TempoMap (Tempo const & initial_tempo, Meter const & initial_meter, sa
 	_tempos.push_back (TempoPoint (*this, initial_tempo, 0, Beats(), BBT_Time()));
 	_meters.push_back (MeterPoint (*this, initial_meter, 0, Beats(), BBT_Time()));
 
-	_points.push_back (TempoMapPoint (*this, TempoMetric (_tempos.front(), _meters.front()), 0, Beats(), BBT_Time()));
-
 	set_dirty (true);
 }
 
@@ -601,171 +615,13 @@ TempoMap::~TempoMap()
 }
 
 #define S2Sc(s) (samples_to_superclock ((s), _sample_rate))
+#define Sc2S(s) (superclock_to_samples ((s), _sample_rate))
 
 void
 TempoMap::set_dirty (bool yn)
 {
 	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("tempo map @ %1 dirty set to %2\n", this, yn));
 	_dirty = yn;
-}
-
-void
-TempoMap::maybe_rebuild ()
-{
-	if (_dirty && !_points.empty()) {
-		rebuild (_points.back().sclock());
-	}
-}
-
-MeterPoint const &
-TempoMap::meter_at (timepos_t const & time) const
-{
-	switch (time.time_domain()) {
-	case AudioTime:
-		return meter_at (time.sample());
-		break;
-	case BarTime:
-		return meter_at (time.bbt());
-		break;
-	case BeatTime:
-		return meter_at (time.beats());
-		break;
-	}
-	/*NOTREACHED*/
-	return meter_at (0);
-}
-
-MeterPoint const &
-TempoMap::meter_at (samplepos_t s) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return meter_at_locked (S2Sc (s));
-}
-
-MeterPoint const &
-TempoMap::meter_at (Temporal::Beats const & b) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return meter_at_locked (b);
-}
-
-MeterPoint const &
-TempoMap::meter_at (Temporal::BBT_Time const & bbt) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return meter_at_locked (bbt);
-}
-
-
-MeterPoint const &
-TempoMap::meter_at_locked (superclock_t sc) const
-{
-	assert (!_meters.empty());
-	MeterPoint m (*this, Meter (1, 1), sc, Beats(), BBT_Time ());
-	Meters::const_iterator x = upper_bound (_meters.begin(), _meters.end(), m, Point::sclock_comparator());
-	if (x == _meters.end()) {
-		return _meters.back();
-	}
-	return *x;
-}
-
-MeterPoint const &
-TempoMap::meter_at_locked (BBT_Time const & bbt) const
-{
-	assert (!_meters.empty());
-	MeterPoint m (*this, Meter (1, 1), 0, Beats(), bbt);
-	Meters::const_iterator x = upper_bound (_meters.begin(), _meters.end(), m, Point::bbt_comparator());
-	if (x == _meters.end()) {
-		return _meters.back();
-	}
-	return *x;
-}
-
-MeterPoint const &
-TempoMap::meter_at_locked (Beats const & beats) const
-{
-	assert (!_meters.empty());
-	MeterPoint m (*this, Meter (1, 1), 0, beats, BBT_Time());
-	Meters::const_iterator x = upper_bound (_meters.begin(), _meters.end(), m, Point::beat_comparator());
-	if (x == _meters.end()) {
-		return _meters.back();
-	}
-	return *x;
-}
-
-TempoPoint const &
-TempoMap::tempo_at (timepos_t const & time) const
-{
-	switch (time.time_domain()) {
-	case AudioTime:
-		return tempo_at (time.sample());
-		break;
-	case BarTime:
-		return tempo_at (time.bbt());
-		break;
-	case BeatTime:
-		return tempo_at (time.beats());
-		break;
-	}
-	/*NOTREACHED*/
-	return tempo_at (0);
-}
-
-TempoPoint const &
-TempoMap::tempo_at (samplepos_t s) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return tempo_at_locked (S2Sc(s));
-}
-
-TempoPoint const &
-TempoMap::tempo_at (Temporal::Beats const &b) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return tempo_at_locked (b);
-}
-
-TempoPoint const &
-TempoMap::tempo_at (Temporal::BBT_Time const & bbt) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return tempo_at_locked (bbt);
-}
-
-TempoPoint const &
-TempoMap::tempo_at_locked (superclock_t sc) const
-{
-	assert (!_tempos.empty());
-	TempoPoint m (*this, Tempo (1, 1), sc, Beats(), BBT_Time ());
-	Tempos::const_iterator x = upper_bound (_tempos.begin(), _tempos.end(), m, Point::sclock_comparator());
-	if (x == _tempos.end()) {
-		return _tempos.back();
-	}
-	return *x;
-}
-
-TempoPoint const &
-TempoMap::tempo_at_locked (BBT_Time const & bbt) const
-{
-	assert (!_tempos.empty());
-	TempoPoint m (*this, Tempo (1, 1), 0, Beats(), bbt);
-	Tempos::const_iterator x = upper_bound (_tempos.begin(), _tempos.end(), m, Point::bbt_comparator());
-	if (x == _tempos.end()) {
-		return _tempos.back();
-	}
-	return *x;
-}
-
-TempoPoint const &
-TempoMap::tempo_at_locked (Beats const & beats) const
-{
-	assert (!_tempos.empty());
-	TempoPoint m (*this, Tempo (1, 1), 0, beats, BBT_Time());
-	Tempos::const_iterator x = upper_bound (_tempos.begin(), _tempos.end(), m, Point::beat_comparator());
-	if (x == _tempos.end()) {
-		return _tempos.back();
-	}
-	return *x;
 }
 
 void
@@ -801,256 +657,24 @@ TempoMap::set_time_domain (TimeDomain td)
 	set_dirty (true);
 }
 
-void
-TempoMap::rebuild (superclock_t limit)
-{
-	/* CALLER MUST HOLD LOCK */
-
-	assert (time_domain() != BarTime);
-	assert (!_tempos.empty());
-	assert (!_meters.empty());
-
-	if (limit == 0) { /* which would make no sense */
-		limit = _points.back().sclock();
-	}
-
-	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("rebuild to %1\n", limit));
-
-	_points.clear ();
-
-	/* iterators t (tempo) and m (meter) can only advance to the final element in their respective containers
-
-	   iterator b (bartimes) can advance (or even begin) to the ::end() of their respective container
-	*/
-
-	Tempos::iterator t = _tempos.begin();
-	Meters::iterator m = _meters.begin();
-	MusicTimes::iterator b = _bartimes.begin();
-	Tempos::iterator nxt_tempo = t; ++nxt_tempo;
-	TempoPoint* current_tempo = &*t;
-	MeterPoint* current_meter = &*m;
-
-	/* verify that initial tempo+meter are at the same (zero) time */
-	assert (t->sclock() == m->sclock());
-	assert (t->sclock() == 0);
-
-	/* default initial BBT time is 1|1|0 but there might be a bartime marker right at the beginning of the map
-	   to change that.
-	*/
-
-	BBT_Time bbt_pos;
-
-	if (b != _bartimes.end()) {
-		if (b->sclock() == 0) {
-			bbt_pos = b->bbt();
-		}
-	}
-
-	/* now add explicit map points for all tempo, meter and bartime points */
-
-	while ((t != _tempos.end()) || (m != _meters.end()) || (b != _bartimes.end())) {
-
-		/* UPDATE RAMP COEFFICIENTS WHEN NECESSARY */
-
-		if (t->ramped() && nxt_tempo != _tempos.end()) {
-			switch (time_domain ()) {
-			case AudioTime:
-				t->compute_c_superclock (_sample_rate, nxt_tempo->superclocks_per_quarter_note (), nxt_tempo->sclock() - t->sclock());
-			case BeatTime:
-				t->compute_c_quarters (_sample_rate, nxt_tempo->superclocks_per_quarter_note (), nxt_tempo->beats() - t->beats());
-			case BarTime:
-				/* NOTREACHED */
-				abort ();
-			}
-		}
-
-		/* figure out which of the 1, 2 or 3 possible iterators defines the next explicit point (we want the earliest on the timeline,
-		   but there may be more than 1 at the same location).
-		*/
-
-		Point first_of_three (*this, std::numeric_limits<superclock_t>::max(), Beats(), BBT_Time()); /* don't care about the beats or BBT values */
-
-		if (m != _meters.end() && m->sclock() < first_of_three.sclock()) {
-			first_of_three = *m;
-		}
-
-		if (t != _tempos.end() && t->sclock() < first_of_three.sclock()) {
-			first_of_three = *t;
-		}
-
-		if (b != _bartimes.end() && (b->sclock() < first_of_three.sclock())) {
-			first_of_three = *b;
-		}
-
-		/* Determine whether a tempo or meter or bartime point (or any combination thereof) is defining this new point */
-
-		bool advance_meter = false;
-		bool advance_tempo = false;
-		bool advance_bartime = false;
-
-		if (m->sclock() == first_of_three.sclock()) {
-			advance_meter = true;
-			current_meter = &*m;
-			cerr << "THIS POINT WILL DEFINE A METER (" << *m << ")\n";
-		}
-
-		if (t->sclock() == first_of_three.sclock()) {
-			advance_tempo = true;
-			current_tempo = &*t;
-			cerr << "THIS POINT WILL DEFINE A TEMPO (" << *t << ")\n";
-		}
-
-		if ((b != _bartimes.end()) && (b->sclock() == first_of_three.sclock())) {
-			advance_bartime = true;
-			cerr << "THIS POINT WILL DEFINE A BBT position\n";
-		}
-
-		/* add an explicit point right here */
-		cerr << "Adding new point with tempo = " << *current_tempo << " meter = " << *current_meter << endl;
-		_points.push_back (TempoMapPoint (*this, TempoMetric (*current_tempo, *current_meter), first_of_three.sclock(), first_of_three.beats(), first_of_three.bbt()));
-		cerr << "ADDED: " << _points.back() << endl;
-
-		if (advance_meter && (m != _meters.end())) {
-			cerr << "used a meter\n";
-			++m;
-		}
-		if (advance_tempo && (t != _tempos.end())) {
-			cerr << "used a tempo\n";
-			++t;
-			if (nxt_tempo != _tempos.end()) {
-				++nxt_tempo;
-			}
-		}
-		if (advance_bartime && (b != _bartimes.end())) {
-			cerr << "used a bartime\n";
-			++b;
-		}
-	}
-
-	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("explicit tempo map contains %1 points\n", _points.size()));
-	dump_locked (cerr);
-
-	/* now fill in all the implicit points until the next explicit one */
-
-	for (TempoMapPoints::iterator p = _points.begin(); p != _points.end(); ) {
-		TempoMapPoints::iterator nxt = p;
-		++nxt;
-
-		if (p->is_explicit_meter()) {
-			current_meter = &p->meter();
-		}
-
-		if (p->is_explicit_tempo()) {
-			current_tempo = &p->tempo();
-		}
-
-		assert (current_tempo);
-		assert (current_meter);
-
-		superclock_t superclock_step = p->superclocks_per_note_type ();
-		superclock_t sc = p->sclock();
-
-		BBT_Time bbt (p->bbt());
-
-		while (nxt != _points.end() || sc < limit) {
-
-			sc += superclock_step;
-
-			if (sc >= nxt->sclock()) {
-				break;
-			}
-
-			Beats beats = p->quarters_at (sc);
-			bbt = p->bbt_add (bbt, Temporal::BBT_Offset (0, 1, 0));
-
-			_points.insert (nxt, TempoMapPoint (*this, TempoMetric (*current_tempo, *current_meter), sc, beats, bbt));
-		}
-
-		/* skip over the points we just inserted, to continue with the next explicit point originally
-		   added earlier.
-		*/
-		p = nxt;
-	}
-
-	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("rebuild: completed, %1 points\n", _points.size()));
-	dump_fundamental (cerr);
-	dump_locked (cerr);
-
-	_generation++;
-	set_dirty (false);
-}
-
-void
-TempoMap::full_rebuild ()
-{
-	TraceableWriterLock lm (_lock);
-	assert (!_points.empty());
-	rebuild (_points.back().sclock());
-}
-
-void
-TempoMap::extend (superclock_t limit)
-{
-	TraceableWriterLock lm (_lock);
-	extend_locked (limit);
-}
-
-void
-TempoMap::extend_locked (superclock_t limit)
-{
-	if (_points.back().sclock() >= limit) {
-		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("extension skipped, map already extends to %1 beyond %2\n", _points.back().sclock(), limit));
-		return;
-	}
-
-	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("extend map to %1 from %2 with %3\n", limit, _points.back().sclock(), _points.size()));
-
-	TempoMapPoint const & last_point (_points.back());
-	TempoMetric metric (metric_at_locked (S2Sc (_points.back().sample())));
-
-	const Beats qn_step = (Temporal::Beats (1,0) * 4) / metric.note_value();
-	const superclock_t superclock_step = metric.superclocks_per_note_type ();
-
-	superclock_t sc = last_point.sclock();
-	Beats qn (last_point.beats ());
-	BBT_Time bbt (last_point.bbt());
-
-	while (1) {
-
-		qn += qn_step;
-		sc += superclock_step;
-
-		if (sc >= limit) {
-			break;
-		}
-
-		bbt = metric.bbt_add (bbt, Temporal::BBT_Offset (0, 1, 0));
-
-		_points.push_back (TempoMapPoint (*this, TempoMetric (last_point.tempo(), last_point.meter()), sc, qn, bbt));
-	}
-
-	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("extension complete, last point at %1 (total points %2)\n", _points.back().sclock(), _points.size()));
-}
-
 MeterPoint*
 TempoMap::add_meter (MeterPoint const & mp)
 {
 	/* CALLER MUST HOLD LOCK */
 
-	assert (time_domain() != BarTime);
-
 	Meters::iterator m;
 
 	switch (time_domain()) {
 	case AudioTime:
-		m = upper_bound (_meters.begin(), _meters.end(), mp, Point::sclock_comparator());
+		for (m = _meters.begin(); m != _meters.end() && m->sclock() < mp.sclock(); ++m);
 		break;
 	case BeatTime:
-		m = upper_bound (_meters.begin(), _meters.end(), mp, Point::beat_comparator());
+		for (m = _meters.begin(); m != _meters.end() && m->beats() < mp.beats(); ++m);
 		break;
 	case BarTime:
-		/* NOTREACHED */
-		abort ();
+		for (m = _meters.begin(); m != _meters.end() && m->bbt() < mp.bbt(); ++m);
+		break;
+
 	}
 
 	bool replaced = false;
@@ -1095,7 +719,7 @@ TempoMap::set_tempo (Tempo const & t, superclock_t sc)
 		Beats beats;
 		BBT_Time bbt;
 
-		TempoMetric tm (metric_at_locked (sc));
+		TempoMetric tm (metric_at_locked (sc, false));
 
 		/* tempo changes must be on beat */
 
@@ -1107,11 +731,9 @@ TempoMap::set_tempo (Tempo const & t, superclock_t sc)
 
 		TempoPoint tp (*this, t, sc, beats, bbt);
 		ret = add_tempo (tp);
-
-		rebuild ();
 	}
 
-	Changed (0, _points.back().sample());
+	Changed ();
 
 	return *ret;
 }
@@ -1132,18 +754,18 @@ TempoMap::set_tempo (Tempo const & t, BBT_Time const & bbt)
 		superclock_t sc;
 		Beats beats;
 
-		TempoMetric metric (metric_at_locked (on_beat));
+		TempoMetric metric (metric_at_locked (on_beat, false));
+
+		cerr << "Recompute beats/SC using " << metric << " for " << bbt << endl;
 
 		beats = metric.quarters_at (on_beat);
-		sc = metric.superclock_at (beats);
+		sc = metric.superclock_at (on_beat);
 
 		TempoPoint tp (*this, t, sc, beats, on_beat);
 		ret = add_tempo (tp);
-
-		rebuild ();
 	}
 
-	Changed (0, _points.back().sample());
+	Changed ();
 
 	return *ret;
 }
@@ -1164,18 +786,16 @@ TempoMap::set_tempo (Tempo const & t, Beats const & beats)
 		superclock_t sc;
 		BBT_Time bbt;
 
-		TempoMetric metric (metric_at_locked (on_beat));
+		TempoMetric metric (metric_at_locked (on_beat, false));
 
 		bbt = metric.bbt_at (on_beat);
 		sc = metric.superclock_at (on_beat);
 
 		TempoPoint tp (*this, t, sc, on_beat, bbt);
 		ret = add_tempo (tp);
-
-		rebuild ();
 	}
 
-	Changed (0, _points.back().sample());
+	Changed ();
 
 	return *ret;
 }
@@ -1187,11 +807,12 @@ TempoMap::set_tempo (Tempo const & t, timepos_t const & time)
 	case AudioTime:
 		return set_tempo (t, time.sample());
 		break;
-	default:
+	case BeatTime:
+		return set_tempo (t, time.beats());
 		break;
 	}
 
-	return set_tempo (t, time.beats());
+	return set_tempo (t, time.bbt());
 }
 
 TempoPoint*
@@ -1199,27 +820,29 @@ TempoMap::add_tempo (TempoPoint const & tp)
 {
 	/* CALLER MUST HOLD LOCK */
 
-	assert (time_domain() != BarTime);
-
 	Tempos::iterator t;
+
+	cerr << "add tempo " << tp << endl;
 
 	switch (time_domain()) {
 	case AudioTime:
-		t = upper_bound (_tempos.begin(), _tempos.end(), tp, Point::sclock_comparator());
+		for (t = _tempos.begin(); t != _tempos.end() && t->sclock() < tp.sclock(); ++t);
 		break;
 	case BeatTime:
-		t = upper_bound (_tempos.begin(), _tempos.end(), tp, Point::beat_comparator());
+		for (t = _tempos.begin(); t != _tempos.end() && t->beats() < tp.beats(); ++t);
 		break;
 	case BarTime:
-		/* NOTREACHED */
-		abort ();
+		for (t = _tempos.begin(); t != _tempos.end() && t->bbt() < tp.bbt(); ++t);
+		break;
 	}
 
 	bool replaced = false;
 	TempoPoint* ret = 0;
 
 	if (t != _tempos.end()) {
+		cerr << "Consider " << *t << endl;
 		if (t->sclock() == tp.sclock()) {
+			cerr << "Overwrite\n";
 			/* overwrite Tempo part of this point */
 			*((Tempo*)&(*t)) = tp;
 			ret = &(*t);
@@ -1228,6 +851,7 @@ TempoMap::add_tempo (TempoPoint const & tp)
 	}
 
 	if (!replaced) {
+		cerr << "Insert\n";
 		ret = &(*(_tempos.insert (t, tp)));
 	}
 
@@ -1242,7 +866,8 @@ TempoMap::remove_tempo (TempoPoint const & tp)
 	{
 		TraceableWriterLock lm (_lock);
 
-		Tempos::iterator t = upper_bound (_tempos.begin(), _tempos.end(), tp, Point::sclock_comparator());
+		Tempos::iterator t;
+		for (t = _tempos.begin(); t != _tempos.end() && t->sclock() < tp.sclock(); ++t);
 		if (t->sclock() != tp.sclock()) {
 			/* error ... no tempo point at the time of tp */
 			return;
@@ -1251,7 +876,7 @@ TempoMap::remove_tempo (TempoPoint const & tp)
 		set_dirty (true);
 	}
 
-	Changed (0, _points.back().sample());
+	Changed ();
 }
 
 /** Given a superclock time, compute the Beat time and BBT_Time using only Tempo and
@@ -1384,7 +1009,7 @@ TempoMap::move_tempo (TempoPoint const & tp, timepos_t const & when, bool push)
 		}
 	}
 
-	Changed (0, _points.back().sample());
+	Changed ();
 
 	return true;
 }
@@ -1433,11 +1058,9 @@ TempoMap::set_meter (Meter const & t, BBT_Time const & bbt)
 		cerr << "Adding " << mp << endl;
 
 		ret = add_meter (mp);
-
-		rebuild ();
 	}
 
-	Changed (0, _points.back().sample());
+	Changed ();
 
 	return *ret;
 }
@@ -1465,11 +1088,9 @@ TempoMap::set_meter (Meter const & t, Beats const & beats)
 		MeterPoint mp (*this, t, sc, rounded_beats, rounded_bbt);
 
 		ret = add_meter (mp);
-
-		rebuild ();
 	}
 
-	Changed (0, _points.back().sample());
+	Changed ();
 
 	return *ret;
 }
@@ -1481,8 +1102,6 @@ TempoMap::set_meter (Meter const & m, superclock_t sc)
 
 	{
 		TraceableWriterLock lm (_lock);
-
-		assert (!_points.empty());
 
 		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("Set meter @ %1 to %2\n", sc, m));
 
@@ -1504,11 +1123,9 @@ TempoMap::set_meter (Meter const & m, superclock_t sc)
 
 		MeterPoint mp (*this, m, sc, beats, bbt);
 		ret = add_meter (mp);
-
-		rebuild ();
 	}
 
-	Changed (0, _points.back().sample());
+	Changed ();
 
 	return *ret;
 }
@@ -1528,100 +1145,8 @@ TempoMap::remove_meter (MeterPoint const & mp)
 		set_dirty (true);
 	}
 
-	Changed (0, _points.back().sample());
+	Changed ();
 
-}
-
-TempoMapPoints::iterator
-TempoMap::iterator_at (superclock_t sc)
-{
-	/* CALLER MUST HOLD LOCK */
-
-	if (_points.empty()) {
-		throw EmptyTempoMapException();
-	}
-
-	if (_points.size() == 1) {
-		return _points.begin();
-	}
-
-	/* Construct an arbitrary TempoMapPoint. The only property we care about is it's superclock time,
-	   so other values used in the constructor are arbitrary and irrelevant.
-	*/
-
-	maybe_rebuild ();
-
-	const TempoMapPoint tp (*this, TempoMetric (_points.front().tempo(), _points.front().meter()), sc, Temporal::Beats(), Temporal::BBT_Time());
-	Point::sclock_comparator scmp;
-
-	TempoMapPoints::iterator tmp = upper_bound (_points.begin(), _points.end(), tp, scmp);
-
-	if (tmp != _points.begin()) {
-		return --tmp;
-	}
-
-	return tmp;
-}
-
-TempoMapPoints::iterator
-TempoMap::iterator_at (Temporal::Beats const & qn)
-{
-	/* CALLER MUST HOLD LOCK */
-
-	if (_points.empty()) {
-		throw EmptyTempoMapException();
-	}
-
-	if (_points.size() == 1) {
-		return _points.begin();
-	}
-
-	maybe_rebuild ();
-
-	/* Construct an arbitrary TempoMapPoint. The only property we care about is its quarters time,
-	   so other values used in the constructor are arbitrary and irrelevant.
-	*/
-
-	const TempoMapPoint tp (*this, TempoMetric (_points.front().tempo(), _points.front().meter()), 0, qn, Temporal::BBT_Time());
-	Point::beat_comparator bcmp;
-
-	TempoMapPoints::iterator tmp = upper_bound (_points.begin(), _points.end(), tp, bcmp);
-
-	if (tmp != _points.begin()) {
-		return --tmp;
-	}
-
-	return tmp;
-}
-
-TempoMapPoints::iterator
-TempoMap::iterator_at (Temporal::BBT_Time const & bbt)
-{
-	/* CALLER MUST HOLD LOCK */
-
-	if (_points.empty()) {
-		throw EmptyTempoMapException();
-	}
-
-	if (_points.size() == 1) {
-		return _points.begin();
-	}
-
-	maybe_rebuild ();
-
-	/* Construct an arbitrary TempoMapPoint. The only property we care about is its bbt time,
-	   so other values used in the constructor are arbitrary and irrelevant.
-	*/
-
-	const TempoMapPoint tp (*this, TempoMetric (_points.front().tempo(), _points.front().meter()), 0, Temporal::Beats(), bbt);
-	Point::bbt_comparator bcmp;
-	TempoMapPoints::iterator tmp = upper_bound (_points.begin(), _points.end(), tp, bcmp);
-
-	if (tmp != _points.begin()) {
-		return --tmp;
-	}
-
-	return tmp;
 }
 
 Temporal::BBT_Time
@@ -1695,10 +1220,10 @@ TempoMap::samplepos_plus_bbt (samplepos_t pos, BBT_Time op) const
 	}
 	pos_bbt.beats += op.beats;
 
-	double divisions_per_bar = meter_at_locked (pos_bbt).divisions_per_bar();
+	double divisions_per_bar = metric_at_locked (pos_bbt).divisions_per_bar();
 	while (pos_bbt.beats >= divisions_per_bar + 1) {
 		++pos_bbt.bars;
-		divisions_per_bar = meter_at_locked (pos_bbt).divisions_per_bar();
+		divisions_per_bar = metric_at_locked (pos_bbt).divisions_per_bar();
 		pos_bbt.beats -= divisions_per_bar;
 	}
 	pos_bbt.bars += op.bars;
@@ -1754,30 +1279,17 @@ TempoMap::set_sample_rate (samplecnt_t new_sr)
 	for (MusicTimes::iterator p = _bartimes.begin(); p != _bartimes.end(); ++p) {
 		p->map_reset_set_sclock_for_sr_change (llrint (ratio * p->sclock()));
 	}
-
-	for (TempoMapPoints::iterator i = _points.begin(); i != _points.end(); ++i) {
-		i->map_reset_set_sclock_for_sr_change (llrint (ratio * i->sclock()));
-	}
 }
 
 void
-TempoMap::dump (std::ostream& ostr)
+TempoMap::dump (std::ostream& ostr) const
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 	dump_locked (ostr);
 }
 
 void
-TempoMap::dump_locked (std::ostream& ostr)
-{
-	ostr << "\n\n------------\n";
-	for (TempoMapPoints::iterator i = _points.begin(); i != _points.end(); ++i) {
-		ostr << *i << std::endl;
-	}
-}
-
-void
-TempoMap::dump_fundamental (std::ostream& ostr) const
+TempoMap::dump_locked (std::ostream& ostr) const
 {
 	for (Tempos::const_iterator t = _tempos.begin(); t != _tempos.end(); ++t) {
 		ostr << *t << endl;
@@ -1801,11 +1313,13 @@ TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, uint32_t 
 	BBT_Time bbt = metric.bbt_at (pos);
 
 	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("get grid between %1..%2 [ %4 .. %5 ] { %6 .. %7 } at bar_mod = %3\n",
-	                                                 pos, end, bar_mod, s, e, metric.bbt_at (pos), metric_at_locked (end).bbt_at (end)));
+	                                                 pos, end, bar_mod, s, e, bbt, metric_at_locked (end).bbt_at (end)));
 
+#ifndef NDEBUG
+	dump (cerr);
+#endif
 
 	if (bar_mod == 0) {
-
 		/* this could change the tempo in effect */
 		bbt = metric.meter().round_up_to_beat (bbt);
 		metric = metric_at_locked (bbt);
@@ -1828,41 +1342,44 @@ TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, uint32_t 
 
 	pos = metric.superclock_at (bbt);
 
-	do {
+	if (pos < end) {
 
-		/* complete the triplet of (superclock,quarters,bbt) */
+		do {
 
-		const Temporal::Beats beats = metric.quarters_at (pos);
+			/* complete the triplet of (superclock,quarters,bbt) */
 
-		/* add point to grid */
+			const Temporal::Beats beats = metric.quarters_at (pos);
 
-		ret.push_back (TempoMapPoint (*this, metric, pos, beats, bbt));
-		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("add to grid %1 %2\n", ret.back().sclock(), ret.back()));
+			/* add point to grid */
 
-		/* Advance by the meter note value size */
+			ret.push_back (TempoMapPoint (*this, metric, pos, beats, bbt));
+			DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("add to grid %1\n", ret.back()));
 
-		if (bar_mod == 0) {
-			pos += metric.superclocks_per_grid (_sample_rate);
-		} else {
-			pos += bar_mod * metric.superclocks_per_bar (_sample_rate);
-		}
+			/* Advance by the meter note value size */
 
-		if (pos >= end) {
-			break;
-		}
+			if (bar_mod == 0) {
+				pos += metric.superclocks_per_grid (_sample_rate);
+			} else {
+				pos += bar_mod * metric.superclocks_per_bar (_sample_rate);
+			}
 
-		/* metric may be different for new position */
-		metric = metric_at_locked (pos);
+			if (pos >= end) {
+				break;
+			}
 
-		/* compute bbt. it appears that one could just add some number
-		 * of beats and/or bars to the current value, but this may
-		 * cross metric boundaries, at which point it gets
-		 * ... complicated.
-		 */
+			/* metric may be different for new position */
+			metric = metric_at_locked (pos);
 
-		bbt = metric.bbt_at (pos);
+			/* compute bbt. it appears that one could just add some number
+			 * of beats and/or bars to the current value, but this may
+			 * cross metric boundaries, at which point it gets
+			 * ... complicated.
+			 */
 
-	} while (true);
+			bbt = metric.bbt_at (pos);
+
+		} while (true);
+	}
 
 	DEBUG_TRACE (DEBUG::TemporalMap, "<<< GRID DONE\n");
 }
@@ -2089,7 +1606,7 @@ TempoMap::bbt_walk (BBT_Time const & bbt, BBT_Offset const & o) const
 		prev_m = m;
 	}
 
-	/* see ::meter_at_locked() for comments about the use of const_cast here
+	/* see ::metric_at_locked() for comments about the use of const_cast here
 	 */
 
 	TempoMetric metric (*const_cast<TempoPoint*>(&*prev_t), *const_cast<MeterPoint*>(&*prev_m));
@@ -2192,7 +1709,6 @@ TempoMap::get_state ()
 
 	node->set_property (X_("time-domain"), _time_domain);
 	node->set_property (X_("superclocks-per-second"), superclock_ticks_per_second);
-	node->set_property (X_("extent"), _points.back().sclock());
 
 	XMLNode* children;
 
@@ -2250,13 +1766,6 @@ TempoMap::set_state (XMLNode const & node, int /*version*/)
 			}
 		}
 	}
-
-	/* now fill in the map */
-
-	superclock_t extent;
-	node.get_property (X_("extent"), extent);
-
-	rebuild (extent);
 
 	return 0;
 }
@@ -2425,20 +1934,20 @@ TempoMap::next_tempo (Tempo const & t) const
 {
 	Glib::Threads::RWLock::ReaderLock lm (_lock);
 
-	TempoMapPoints::const_iterator p = _points.begin();
+	Tempos::const_iterator p = _tempos.begin();
 
-	while (p != _points.end()) {
-		if (&t == &p->tempo()) {
+	while (p != _tempos.end()) {
+		if (&t == &*p) {
 			break;
 		}
 		++p;
 	}
 
-	if (p != _points.end()) {
+	if (p != _tempos.end()) {
 		++p;
 
-		if (p != _points.end()) {
-			return &p->tempo();
+		if (p != _tempos.end()) {
+			return &*p;;
 		}
 	}
 
@@ -2597,7 +2106,7 @@ TempoMap::insert_time (timepos_t const & pos, timecnt_t const & duration)
 		set_dirty (true);
 	}
 
-	Changed (0, _points.back().sample());
+	Changed ();
 }
 
 bool
@@ -2606,7 +2115,7 @@ TempoMap::remove_time (timepos_t const & pos, timecnt_t const & duration)
 	bool moved = false;
 
 	if (moved) {
-		Changed (0, _points.back().sample());
+		Changed ();
 	}
 
 	return moved;
@@ -2668,7 +2177,7 @@ TempoMap::metric_at (BBT_Time const & bbt) const
 }
 
 TempoMetric
-TempoMap::metric_at_locked (superclock_t sc) const
+TempoMap::metric_at_locked (superclock_t sc, bool can_match) const
 {
 	Tempos::const_iterator t, prev_t;
 	Meters::const_iterator m, prev_m;
@@ -2683,14 +2192,16 @@ TempoMap::metric_at_locked (superclock_t sc) const
 	for (t = _tempos.begin(), prev_t = t; t != _tempos.end() && t->sclock() < sc; ++t) { prev_t = t; }
 	for (m = _meters.begin(), prev_m = m; m != _meters.end() && m->sclock() < sc; ++m) { prev_m = m; }
 
-	/* may have found tempo and/or meter precisely at @param sc */
+	if (can_match) {
+		/* may have found tempo and/or meter precisely at @param sc */
 
-	if (t != _tempos.end() && t->sclock() == sc) {
-		prev_t = t;
-	}
+		if (t != _tempos.end() && t->sclock() == sc) {
+			prev_t = t;
+		}
 
-	if (m != _meters.end() && m->sclock() == sc) {
-		prev_m = m;
+		if (m != _meters.end() && m->sclock() == sc) {
+			prev_m = m;
+		}
 	}
 
 	/* I hate doing this const_cast<>, but making this method non-const
@@ -2704,7 +2215,7 @@ TempoMap::metric_at_locked (superclock_t sc) const
 }
 
 TempoMetric
-TempoMap::metric_at_locked (Beats const & b) const
+TempoMap::metric_at_locked (Beats const & b, bool can_match) const
 {
 	Tempos::const_iterator t, prev_t;
 	Meters::const_iterator m, prev_m;
@@ -2719,14 +2230,16 @@ TempoMap::metric_at_locked (Beats const & b) const
 	for (t = _tempos.begin(), prev_t = t; t != _tempos.end() && t->beats() < b; ++t) { prev_t = t; }
 	for (m = _meters.begin(), prev_m = m; m != _meters.end() && m->beats() < b; ++m) { prev_m = m; }
 
-	/* may have found tempo and/or meter precisely at @param b */
+	if (can_match) {
+		/* may have found tempo and/or meter precisely at @param b */
 
-	if (t != _tempos.end() && t->beats() == b) {
-		prev_t = t;
-	}
+		if (t != _tempos.end() && t->beats() == b) {
+			prev_t = t;
+		}
 
-	if (m != _meters.end() && m->beats() == b) {
-		prev_m = m;
+		if (m != _meters.end() && m->beats() == b) {
+			prev_m = m;
+		}
 	}
 
 	/* I hate doing this const_cast<>, but making this method non-const
@@ -2740,7 +2253,7 @@ TempoMap::metric_at_locked (Beats const & b) const
 }
 
 TempoMetric
-TempoMap::metric_at_locked (BBT_Time const & bbt) const
+TempoMap::metric_at_locked (BBT_Time const & bbt, bool can_match) const
 {
 	Tempos::const_iterator t, prev_t;
 	Meters::const_iterator m, prev_m;
@@ -2755,14 +2268,16 @@ TempoMap::metric_at_locked (BBT_Time const & bbt) const
 	for (t = _tempos.begin(), prev_t = t; t != _tempos.end() && t->bbt() < bbt; ++t) { prev_t = t; }
 	for (m = _meters.begin(), prev_m = m; m != _meters.end() && m->bbt() < bbt; ++m) { prev_m = m; }
 
-	/* may have found tempo and/or meter precisely at @param bbt */
+	if (can_match) {
+		/* may have found tempo and/or meter precisely at @param bbt */
 
-	if (t != _tempos.end() && t->bbt() == bbt) {
-		prev_t = t;
-	}
+		if (t != _tempos.end() && t->bbt() == bbt) {
+			prev_t = t;
+		}
 
-	if (m != _meters.end() && m->bbt() == bbt) {
-		prev_m = m;
+		if (m != _meters.end() && m->bbt() == bbt) {
+			prev_m = m;
+		}
 	}
 
 	/* I hate doing this const_cast<>, but making this method non-const

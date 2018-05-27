@@ -51,7 +51,7 @@ TempoDialog::TempoDialog (TempoMap& map, timepos_t when, const string&)
 	, tap_tempo_button (_("Tap tempo"))
 {
 	Temporal::BBT_Time bbt (when.bbt());
-	TempoPoint const & tempo (_map.tempo_at (bbt));
+	TempoPoint const & tempo (_map.metric_at (bbt).tempo());
 	init (bbt, tempo.note_types_per_minute(), tempo.end_note_types_per_minute(), tempo.note_type(), Tempo::Constant, true, map.time_domain());
 }
 
@@ -477,7 +477,7 @@ MeterDialog::MeterDialog (TempoMap& map, timepos_t const & position, const strin
 	: ArdourDialog (_("New Meter"))
 {
 	BBT_Time rounded (map.round_to_bar (position.bbt()));
-	Meter meter (map.meter_at (rounded));
+	TempoMetric meter (map.metric_at (rounded));
 
 	init (rounded, meter.divisions_per_bar(), meter.note_value(), false, BarTime);
 }

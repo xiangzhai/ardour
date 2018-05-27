@@ -368,48 +368,6 @@ TempoMap::set_dirty (bool yn)
 	_dirty = yn;
 }
 
-Meter const &
-TempoMap::meter_at (superclock_t sc) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return meter_at_locked (sc);
-}
-
-Meter const &
-TempoMap::meter_at (Temporal::Beats const & b) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return meter_at_locked (b);
-}
-
-Meter const &
-TempoMap::meter_at (Temporal::BBT_Time const & bbt) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return meter_at_locked (bbt);
-}
-
-Tempo const &
-TempoMap::tempo_at (superclock_t sc) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return tempo_at_locked (sc);
-}
-
-Tempo const &
-TempoMap::tempo_at (Temporal::Beats const &b) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return tempo_at_locked (b);
-}
-
-Tempo const &
-TempoMap::tempo_at (Temporal::BBT_Time const & bbt) const
-{
-	Glib::Threads::RWLock::ReaderLock lm (_lock);
-	return tempo_at_locked (bbt);
-}
-
 void
 TempoMap::rebuild (superclock_t limit)
 {

@@ -116,7 +116,7 @@ StepEditor::prepare_step_edit_region ()
 
 	} else {
 
-		const Meter& m = _mtv.session()->tempo_map().meter_at (step_edit_insert_position);
+		const Meter& m = _mtv.session()->tempo_map().metric_at (step_edit_insert_position).meter();
 		Temporal::Beats baf = max (Temporal::Beats(), _mtv.session()->tempo_map().quarter_note_at (step_edit_insert_position));
 		Temporal::Beats next_bar_in_beats =  baf + Temporal::Beats::beats (m.divisions_per_bar());
 		timepos_t next_bar_pos = _mtv.session()->tempo_map().sample_at (next_bar_in_beats);

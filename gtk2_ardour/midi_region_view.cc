@@ -3402,7 +3402,7 @@ MidiRegionView::nudge_notes (bool forward, bool fine)
 	if (!fine) {
 
 		/* non-fine, move by 1 bar regardless of snap */
-		delta = Temporal::Beats::beats (trackview.session()->tempo_map().meter_at (ref_point).divisions_per_bar());
+		delta = Temporal::Beats::beats (trackview.session()->tempo_map().metric_at (ref_point).divisions_per_bar());
 
 	} else if (trackview.editor().snap_mode() == Editing::SnapOff) {
 

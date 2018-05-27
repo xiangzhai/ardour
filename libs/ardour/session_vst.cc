@@ -188,12 +188,12 @@ intptr_t Session::vst_callback (
 			timeinfo->sampleRate = session->sample_rate();
 
 			if (value & (kVstTempoValid)) {
-				const Temporal::Tempo& t (session->tempo_map().tempo_at (now));
+				const Temporal::Tempo& t (session->tempo_map().metric_at (now).tempo());
 				timeinfo->tempo = t.quarter_notes_per_minute ();
 				newflags |= (kVstTempoValid);
 			}
 			if (value & (kVstTimeSigValid)) {
-				const Temporal::Meter& ms (session->tempo_map().meter_at (now));
+				const Temporal::Meter& ms (session->tempo_map().metric_at (now).meter());
 				timeinfo->timeSigNumerator = ms.divisions_per_bar ();
 				timeinfo->timeSigDenominator = ms.note_value ();
 				newflags |= (kVstTimeSigValid);
@@ -315,7 +315,7 @@ intptr_t Session::vst_callback (
 		SHOW_CALLBACK ("audioMasterTempoAt");
 		// returns tempo (in bpm * 10000) at sample sample location passed in <value>
 		if (session) {
-			const Temporal::Tempo& t (session->tempo_map().tempo_at (value));
+			const Temporal::Tempo& t (session->tempo_map().metric_at (value).tempo());
 			return t.quarter_notes_per_minute() * 1000;
 		} else {
 			return 0;

@@ -1758,12 +1758,12 @@ private:
 	Curves tempo_curves;
 
 	void remove_metric_marks ();
-	void draw_metric_marks (Temporal::TempoMapPoints &);
+	void draw_metric_marks (Temporal::TempoMap::Metrics &);
 
 	void compute_current_bbt_points (Temporal::TempoMapPoints& grid, samplepos_t left, samplepos_t right);
 
 	void tempo_map_property_changed (const PBD::PropertyChange&);
-	void tempo_map_changed (samplepos_t, samplepos_t);
+	void tempo_map_changed ();
 	void redisplay_tempo (bool immediate_redraw);
 
 	uint32_t bbt_beat_subdivision;

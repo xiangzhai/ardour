@@ -1731,7 +1731,7 @@ private:
 	void send_song_position_pointer (samplepos_t);
 
 	Temporal::TempoMap    *_tempo_map;
-	void tempo_map_changed (Temporal::samplepos_t, Temporal::samplepos_t);
+	void tempo_map_changed ();
 
 	/* edit/mix groups */
 

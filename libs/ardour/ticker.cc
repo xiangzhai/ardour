@@ -68,7 +68,7 @@ public:
 
 	    s->bbt_time (this->sample, *this);
 
-	    const Meter& meter = s->tempo_map().meter_at (sample);
+	    const Meter& meter = s->tempo_map().metric_at (sample).meter();
 
 	    const double divisions   = meter.divisions_per_bar();
 	    const double divisor     = meter.note_value();
@@ -308,7 +308,7 @@ MidiClockTicker::tick (const samplepos_t& /* transport_sample */, pframes_t nfra
 double
 MidiClockTicker::one_ppqn_in_samples (samplepos_t transport_position)
 {
-	Tempo const & tempo (_session->tempo_map().tempo_at (transport_position));
+	Tempo const & tempo (_session->tempo_map().metric_at (transport_position).tempo());
 	const double samples_per_quarter_note = tempo.samples_per_quarter_note (_session->nominal_sample_rate());
 	return samples_per_quarter_note / double (_ppqn);
 }

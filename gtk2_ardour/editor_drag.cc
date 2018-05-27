@@ -3392,7 +3392,7 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 
 
 			timepos_t const pointer = adjusted_current_time (event, false);
-			Temporal::MeterPoint const & meter = map.meter_at (pointer.bbt());
+			Temporal::MeterPoint const & meter = map.metric_at (pointer.bbt()).meter();
 			BBT_Time bbt = meter.bbt();
 
 			/* we can't add a meter where one currently exists */
@@ -6703,7 +6703,7 @@ NoteCreateDrag::grid_aligned_beats (samplepos_t pos, GdkEvent const * event) con
 		beats = map.quarter_note_at (pos);
 		break;
 	case -1: /* round to bar */
-		beats = map.quarter_note_at (map.meter_at (pos).round_to_bar (map.bbt_at (pos)));
+		beats = map.quarter_note_at (map.metric_at (pos).meter().round_to_bar (map.bbt_at (pos)));
 		break;
 	default: /* round to some beat subdivision */
 		beats = map.quarter_note_at (pos).round_to_subdivision (divisions, Temporal::RoundNearest);

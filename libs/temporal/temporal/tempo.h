@@ -566,16 +566,6 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	Tempo const * next_tempo (Tempo const &) const;
 	Meter const * next_meter (Meter const &) const;
 
-	MeterPoint const & meter_at (samplepos_t pos) const;
-	MeterPoint const & meter_at (Beats const & b) const;
-	MeterPoint const & meter_at (BBT_Time const & bbt) const;
-	MeterPoint const & meter_at (timepos_t const &) const;
-
-	TempoPoint const & tempo_at (samplepos_t pos) const;
-	TempoPoint const & tempo_at (Beats const &b) const;
-	TempoPoint const & tempo_at (BBT_Time const & bbt) const;
-	TempoPoint const & tempo_at (timepos_t const & t) const;
-
 	TempoMetric metric_at (timepos_t const &) const;
 	TempoMetric metric_at (samplepos_t sc) const;
 	TempoMetric metric_at (Beats const &b) const;
@@ -630,22 +620,27 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 
 	void get_grid (TempoMapPoints& points, samplepos_t start, samplepos_t end, uint32_t bar_mod);
 
-	template<class T> void apply_with_points (T& obj, void (T::*method)(TempoMapPoints &)) {
+	typedef std::list<Point*> Metrics;
+
+	template<class T> void apply_with_metrics (T& obj, void (T::*method)(Metrics &)) {
 		Glib::Threads::RWLock::ReaderLock lm (_lock);
-		(obj.*method)(_points);
+		Metrics metrics;
+		for (Tempos::iterator t = _tempos.begin(); t != _tempos.end(); ++t) {
+			metrics.push_back (&*t);
+		}
+		for (Meters::iterator m = _meters.begin(); m != _meters.end(); ++m) {
+			metrics.push_back (&*m);
+		}
+		(obj.*method)(metrics);
 	}
 
 	struct EmptyTempoMapException : public std::exception {
 		virtual const char* what() const throw() { return "TempoMap is empty"; }
 	};
 
-	void dump (std::ostream&);
-	void dump_fundamental (std::ostream&) const;
-	void extend (superclock_t limit);
-	void rebuild (superclock_t limit = 0);
-	void full_rebuild ();
+	void dump (std::ostream&) const;
 
-	PBD::Signal2<void,samplepos_t,samplepos_t> Changed;
+	PBD::Signal0<void> Changed;
 
 	XMLNode& get_state();
 	int set_state (XMLNode const&, int version);
@@ -659,48 +654,20 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	Meters       _meters;
 	MusicTimes   _bartimes;
 
-	TempoMapPoints                _points;
 	samplecnt_t                   _sample_rate;
 	mutable Glib::Threads::RWLock _lock;
 	bool                          _dirty;
 	int                           _generation;
 	TimeDomain                     _time_domain;
 
-	/* these return an iterator that refers to the TempoMapPoint at or most immediately preceding the given position.
-	 *
-	 * Conceptually, these could be const methods, but C++ prevents them returning a non-const iterator in that case.
-	 *
-	 * Note that they cannot return an invalid iterator (e.g. _points.end()) because:
-	 *
-	 *    - if the map is empty, an exception is thrown
-	 *    - if the given time is before the first map entry, _points.begin() is returned
-	 *    - if the given time is after the last map entry, the equivalent of _points.rbegin() is returned
-	 *    - if the given time is within the map entries, a valid iterator will be returned
-	 *
-	 * The caller MUST hold a read or write lock on the map.
-	 */
-
-	TempoMapPoints::iterator iterator_at (superclock_t sc);
-	TempoMapPoints::iterator iterator_at (Beats const &);
-	TempoMapPoints::iterator iterator_at (BBT_Time const &);
-
-	/* Returns the TempoMapPoint at or most immediately preceding the given time. If the given time is
-	 * before the first map entry, then the first map entry will be returned, which underlies the semantics
-	 * that the first map entry's values propagate backwards in time if not at absolute zero.
-	 *
-	 * As for iterator_at(), define both const+const and non-const variants, because C++ won't let us return a non-const iterator
-	   from a const method (which is a bit silly, but presumably aids compiler reasoning).
+	/* These return the TempoMetric in effect at the given time. If
+	   can_match is true, then the TempoMetric may refer to a Tempo or
+	   Meter at the given time. If can_match is false, the TempoMetric will
+	   only refer to the Tempo or Metric preceding the given time.
 	*/
-	MeterPoint const & meter_at_locked (superclock_t sc) const;
-	MeterPoint const & meter_at_locked (Beats const & b) const;
-	MeterPoint const & meter_at_locked (BBT_Time const & bbt) const;
-	TempoPoint const & tempo_at_locked (superclock_t sc) const;
-	TempoPoint const & tempo_at_locked (Beats const &b) const;
-	TempoPoint const & tempo_at_locked (BBT_Time const & bbt) const;
-
-	TempoMetric metric_at_locked (superclock_t) const;
-	TempoMetric metric_at_locked (Beats const &) const;
-	TempoMetric metric_at_locked (BBT_Time const &) const;
+	TempoMetric metric_at_locked (superclock_t, bool can_match = true) const;
+	TempoMetric metric_at_locked (Beats const &, bool can_match = true) const;
+	TempoMetric metric_at_locked (BBT_Time const &, bool can_match = true) const;
 
 	int set_tempos_from_state (XMLNode const &);
 	int set_meters_from_state (XMLNode const &);
@@ -709,9 +676,7 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	TempoPoint & set_tempo (Tempo const &, superclock_t);
 	MeterPoint & set_meter (Meter const &, superclock_t);
 
-	void maybe_rebuild();
-	void rebuild_locked (superclock_t limit);
-	void dump_locked (std::ostream&);
+	void dump_locked (std::ostream&) const;
 
 	TempoPoint* add_tempo (TempoPoint const &);
 	MeterPoint* add_meter (MeterPoint const &);
@@ -719,8 +684,6 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 
 	void solve (superclock_t sc, Beats & beats, BBT_Time & bbt) const;
 	void solve (Beats const & beats, superclock_t & sc, BBT_Time & bbt) const;
-
-	void extend_locked (superclock_t limit);
 };
 
 } /* end of namespace Temporal */

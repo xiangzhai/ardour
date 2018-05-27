@@ -264,7 +264,7 @@ Session::post_engine_init ()
 		_tempo_map = new Temporal::TempoMap (Temporal::Tempo (120), Temporal::Meter (4, 4), _current_sample_rate);
 		timepos_t::set_tempo_map (*_tempo_map);
 		timecnt_t::set_tempo_map (*_tempo_map);
-		_tempo_map->Changed.connect_same_thread (*this, boost::bind (&Session::tempo_map_changed, this, _1, _2));
+		_tempo_map->Changed.connect_same_thread (*this, boost::bind (&Session::tempo_map_changed, this));
 	} catch (std::exception const & e) {
 		error << _("Unexpected exception during session setup: ") << e.what() << endmsg;
 		return -2;

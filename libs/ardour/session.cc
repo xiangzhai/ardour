@@ -5813,7 +5813,7 @@ Session::bundle_by_name (string name) const
 }
 
 void
-Session::tempo_map_changed (Temporal::samplepos_t /*start_of_change*/, Temporal::samplepos_t /*end_of_change*/)
+Session::tempo_map_changed ()
 {
 	clear_clicks ();
 	playlists->update_after_tempo_map_change ();

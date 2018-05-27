@@ -6748,7 +6748,7 @@ Editor::define_one_bar (samplepos_t start, samplepos_t end)
 
 	samplecnt_t length = end - start;
 
-	const Meter& m (_session->tempo_map().meter_at (start));
+	const TempoMetric& m (_session->tempo_map().metric_at (start));
 
 	/* length = 1 bar */
 

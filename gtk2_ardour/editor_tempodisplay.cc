@@ -84,56 +84,55 @@ struct CurveComparator {
 	}
 };
 void
-Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
+Editor::draw_metric_marks (TempoMap::Metrics & metrics)
 {
 	char buf[64];
-	TempoMapPoints::const_iterator prev_ts = points.end();
+	TempoPoint* prev_ts = 0;
 	double max_tempo = 0.0;
 	double min_tempo = DBL_MAX;
 
 	remove_metric_marks (); // also clears tempo curves
 
-	for (TempoMapPoints::iterator i = points.begin(); i != points.end(); ++i) {
+	for (TempoMap::Metrics::iterator i = metrics.begin(); i != metrics.end(); ++i) {
 
-		if (!i->is_explicit()) {
-			continue;
-		}
+		TempoPoint* tp;
+		Temporal::MeterPoint* mp;
 
-		if (i->is_explicit_meter()) {
+		if ((mp = dynamic_cast<Temporal::MeterPoint*> (*i))) {
 
-			snprintf (buf, sizeof(buf), "%d/%d", i->divisions_per_bar(), i->note_value ());
+			snprintf (buf, sizeof(buf), "%d/%d", mp->divisions_per_bar(), mp->note_value ());
 
-			if (i->map().time_domain() != Temporal::AudioTime) {
-				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker music"), buf, i->meter()));
+			if (mp->map().time_domain() != Temporal::AudioTime) {
+				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker music"), buf, *mp));
 			} else {
-				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker"), buf, i->meter()));
+				metric_marks.push_back (new MeterMarker (*this, *meter_group, UIConfiguration::instance().color ("meter marker"), buf, *mp));
 			}
 		}
 
-		if (i->is_explicit_tempo()) {
+		if ((tp = dynamic_cast<TempoPoint*> (*i))) {
 
-			max_tempo = max (max_tempo, i->tempo().note_types_per_minute());
-			max_tempo = max (max_tempo, i->tempo().end_note_types_per_minute());
-			min_tempo = min (min_tempo, i->tempo().note_types_per_minute());
-			min_tempo = min (min_tempo, i->tempo().end_note_types_per_minute());
+			max_tempo = max (max_tempo, tp->note_types_per_minute());
+			max_tempo = max (max_tempo, tp->end_note_types_per_minute());
+			min_tempo = min (min_tempo, tp->note_types_per_minute());
+			min_tempo = min (min_tempo, tp->end_note_types_per_minute());
 			uint32_t const tc_color = UIConfiguration::instance().color ("tempo curve");
 
-			tempo_curves.push_back (new TempoCurve (*this, *tempo_group, tc_color, i->tempo(), i->sample(), false));
+			tempo_curves.push_back (new TempoCurve (*this, *tempo_group, tc_color, *tp, tp->sample(), false));
 
 			const std::string tname (X_(""));
-			if (i->map().time_domain() != Temporal::AudioTime) {
-				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker music"), tname, i->tempo()));
+			if (tp->map().time_domain() != Temporal::AudioTime) {
+				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker music"), tname, *tp));
 			} else {
-				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker"), tname, i->tempo()));
+				metric_marks.push_back (new TempoMarker (*this, *tempo_group, UIConfiguration::instance().color ("tempo marker"), tname, *tp));
 			}
 
-			if (prev_ts != points.end() && abs (prev_ts->tempo().end_note_types_per_minute() - i->tempo().note_types_per_minute()) < 1.0) {
+			if (prev_ts && abs (prev_ts->end_note_types_per_minute() - tp->note_types_per_minute()) < 1.0) {
 				metric_marks.back()->set_points_color (UIConfiguration::instance().color ("tempo marker music"));
 			} else {
 				metric_marks.back()->set_points_color (UIConfiguration::instance().color ("tempo marker"));
 			}
 
-			prev_ts = i;
+			prev_ts = tp;
 		}
 
 	}
@@ -180,11 +179,11 @@ Editor::draw_metric_marks (Temporal::TempoMapPoints & points)
 void
 Editor::tempo_map_property_changed (const PropertyChange& /*ignored*/)
 {
-	tempo_map_changed (0, 0);
+	tempo_map_changed ();
 }
 
 void
-Editor::tempo_map_changed (samplepos_t, samplepos_t)
+Editor::tempo_map_changed ()
 {
 	cerr << "TEMPO MAP CHANGED IN GUI\n";
 
@@ -203,7 +202,7 @@ Editor::tempo_map_changed (samplepos_t, samplepos_t)
 		compute_current_bbt_points (grid, _leftmost_sample, _leftmost_sample + current_page_samples());
 	}
 
-	_session->tempo_map().apply_with_points (*this, &Editor::draw_metric_marks); // redraw metric markers
+	_session->tempo_map().apply_with_metrics (*this, &Editor::draw_metric_marks); // redraw metric markers
 	draw_measures (grid);
 	update_tempo_based_rulers ();
 
@@ -482,6 +481,8 @@ Editor::edit_meter_section (Temporal::MeterPoint const & point)
 {
 	MeterDialog meter_dialog (_session->tempo_map(), point, _("done"));
 
+	cerr << "EMS\n";
+
 	switch (meter_dialog.run()) {
 	case RESPONSE_ACCEPT:
 		break;
@@ -501,6 +502,7 @@ Editor::edit_meter_section (Temporal::MeterPoint const & point)
 	begin_reversible_command (_("replace meter mark"));
 	XMLNode &before = _session->tempo_map().get_state();
 
+	cerr << "Setting meter\n";
 	_session->tempo_map().set_meter (meter, when);
 
 	XMLNode &after = _session->tempo_map().get_state();
@@ -512,6 +514,8 @@ void
 Editor::edit_tempo_section (Temporal::TempoPoint const & point)
 {
 	TempoDialog tempo_dialog (_session->tempo_map(), point, _("done"));
+
+	cerr << "Going to edit " << point << endl;
 
 	switch (tempo_dialog.run ()) {
 	case RESPONSE_ACCEPT:
