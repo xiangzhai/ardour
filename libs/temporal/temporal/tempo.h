@@ -80,11 +80,6 @@ class TempoMap;
  * Because Point is foundational in building the tempo map, and we cannot
  * create a circular functional dependency between them. So a Point always has
  * its superclock and beat time defined and no translation between them is possible.
- *
- * In general, most Points in a TempoMap will use the AudioTime
- * domain. Currently (March 2018) this is an alias for superclock_t rather than
- * samples. They are linearly related anyway and at the code (and machine)
- * level, they are the same type.
  */
 
 class LIBTEMPORAL_API Point {
