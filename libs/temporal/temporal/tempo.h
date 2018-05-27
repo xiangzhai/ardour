@@ -59,10 +59,7 @@
 
    All points have a position defined by a superclock_t value.
 
-   Beats increase monotonically throughout the tempo map (BBT may not). Each
-   beat value of a point is 1 beat more than the previous point. Beats start at
-   zero. If the user moved a point, it will retain the same beat value, but
-   will have a new superclock_t position.
+   Beats increase monotonically throughout the tempo map (BBT may not).
 
    The map has a single time domain at any time, and can only be using either
    AudioTime or BeatTime. BarTime is not legal as a map time domain.
@@ -70,23 +67,6 @@
    When the map is using AudioTime as its time domain, .... [ what? ]
 
    When the map is using BarTime as its time domain, .... [ what? ]
-
-   The visible tempo map consists of a set of TempoMapPoints, one for every
-   beat spanning a duration from zero to some extent defined by the map's
-   user.
-
-   Rebuilding the map consists of the following steps:
-
-   1) traverse the list of tempos, and recompute any ramps between them
-   2) create a set of "explicit" points from the set of tempo, meter and beat positions
-   3) fill in between them and until the final requested extent with "implicit" points
-
-   This rebuild can theoretically be optimized by only rebuilding from a
-   certain point in time (e.g. the first explicit (or implicit?) point marked "dirty").
-
-
-   Step 1 requires an intermediate data type: a tempo combined with a
-   duration.
 */
 
 
