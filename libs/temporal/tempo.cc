@@ -1736,36 +1736,40 @@ TempoMap::get_state ()
 int
 TempoMap::set_state (XMLNode const & node, int /*version*/)
 {
-	TraceableWriterLock lm (_lock);
+	{
+		TraceableWriterLock lm (_lock);
 
-	/* global map properties */
+		/* global map properties */
 
-	/* XXX this should probably be at the global level in the session file because it affects a lot more than just the tempo map, potentially */
-	node.get_property (X_("superclocks-per-second"), superclock_ticks_per_second);
+		/* XXX this should probably be at the global level in the session file because it affects a lot more than just the tempo map, potentially */
+		node.get_property (X_("superclocks-per-second"), superclock_ticks_per_second);
 
-	node.get_property (X_("time-domain"), _time_domain);
+		node.get_property (X_("time-domain"), _time_domain);
 
-	XMLNodeList const & children (node.children());
+		XMLNodeList const & children (node.children());
 
-	for (XMLNodeList::const_iterator c = children.begin(); c != children.end(); ++c) {
-		if ((*c)->name() == X_("Tempos")) {
-			if (set_tempos_from_state (**c)) {
-				return -1;
+		for (XMLNodeList::const_iterator c = children.begin(); c != children.end(); ++c) {
+			if ((*c)->name() == X_("Tempos")) {
+				if (set_tempos_from_state (**c)) {
+					return -1;
+				}
 			}
-		}
 
-		if ((*c)->name() == X_("Meters")) {
-			if (set_meters_from_state (**c)) {
-				return -1;
+			if ((*c)->name() == X_("Meters")) {
+				if (set_meters_from_state (**c)) {
+					return -1;
+				}
 			}
-		}
 
-		if ((*c)->name() == X_("MusicTimes")) {
-			if (set_music_times_from_state (**c)) {
-				return -1;
+			if ((*c)->name() == X_("MusicTimes")) {
+				if (set_music_times_from_state (**c)) {
+					return -1;
+				}
 			}
 		}
 	}
+
+	Changed ();
 
 	return 0;
 }
