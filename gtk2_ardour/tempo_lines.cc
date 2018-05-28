@@ -186,4 +186,3 @@ TempoLines::draw (TempoMapPoints& grid,
 		}
 	}
 }
-

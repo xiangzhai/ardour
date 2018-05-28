@@ -273,15 +273,6 @@ Editor::tempo_map_changed ()
 			tempo_marker->update_height_mark ((tempo_marker->tempo().note_types_per_minute() - min_tempo) / max (max_tempo - min_tempo, 10.0));
 		}
 	}
-
-	compute_bbt_ruler_scale (_leftmost_sample, _leftmost_sample + current_page_samples());
-
-	if (bbt_ruler_scale != bbt_show_many) {
-		compute_current_bbt_points (grid, _leftmost_sample, _leftmost_sample + current_page_samples());
-	}
-
-	draw_measures (grid);
-	update_tempo_based_rulers ();
 }
 
 void
@@ -385,8 +376,7 @@ Editor::draw_measures (TempoMapPoints& grid)
 		tempo_lines = new TempoLines (time_line_group);
 	}
 
-	const unsigned divisions = get_grid_beat_divisions ();
-	tempo_lines->draw (grid, divisions, _leftmost_sample, _session->sample_rate());
+	tempo_lines->draw (grid, get_grid_beat_divisions(), _leftmost_sample, _session->sample_rate());
 }
 
 void
@@ -481,8 +471,6 @@ Editor::edit_meter_section (Temporal::MeterPoint const & point)
 {
 	MeterDialog meter_dialog (_session->tempo_map(), point, _("done"));
 
-	cerr << "EMS\n";
-
 	switch (meter_dialog.run()) {
 	case RESPONSE_ACCEPT:
 		break;
@@ -502,7 +490,6 @@ Editor::edit_meter_section (Temporal::MeterPoint const & point)
 	begin_reversible_command (_("replace meter mark"));
 	XMLNode &before = _session->tempo_map().get_state();
 
-	cerr << "Setting meter\n";
 	_session->tempo_map().set_meter (meter, when);
 
 	XMLNode &after = _session->tempo_map().get_state();
@@ -514,8 +501,6 @@ void
 Editor::edit_tempo_section (Temporal::TempoPoint const & point)
 {
 	TempoDialog tempo_dialog (_session->tempo_map(), point, _("done"));
-
-	cerr << "Going to edit " << point << endl;
 
 	switch (tempo_dialog.run ()) {
 	case RESPONSE_ACCEPT:

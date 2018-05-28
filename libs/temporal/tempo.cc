@@ -840,9 +840,7 @@ TempoMap::add_tempo (TempoPoint const & tp)
 	TempoPoint* ret = 0;
 
 	if (t != _tempos.end()) {
-		cerr << "Consider " << *t << endl;
 		if (t->sclock() == tp.sclock()) {
-			cerr << "Overwrite\n";
 			/* overwrite Tempo part of this point */
 			*((Tempo*)&(*t)) = tp;
 			ret = &(*t);
@@ -851,7 +849,6 @@ TempoMap::add_tempo (TempoPoint const & tp)
 	}
 
 	if (!replaced) {
-		cerr << "Insert\n";
 		ret = &(*(_tempos.insert (t, tp)));
 	}
 
@@ -1316,7 +1313,9 @@ TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, uint32_t 
 	                                                 pos, end, bar_mod, s, e, bbt, metric_at_locked (end).bbt_at (end)));
 
 #ifndef NDEBUG
-	dump (cerr);
+	if (DEBUG_ENABLED(PBD::DEBUG::TemporalMap)) {
+		dump (cerr);
+	}
 #endif
 
 	if (bar_mod == 0) {
