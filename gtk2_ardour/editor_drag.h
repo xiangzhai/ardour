@@ -768,6 +768,7 @@ private:
 	MeterMarker* _marker;
 
 	bool _copy;
+	bool _movable;
 	Editing::SnapType _old_snap_type;
 	Editing::SnapMode _old_snap_mode;
 	XMLNode* before_state;

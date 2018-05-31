@@ -124,6 +124,7 @@ class LIBTEMPORAL_API Point {
 	   test only one.
 	*/
 	inline bool operator== (Point const & other) const { return _sclock == other._sclock; }
+	inline bool operator!= (Point const & other) const { return _sclock != other._sclock; }
 
 	TempoMap const & map() const { return *_map; }
 
@@ -230,6 +231,16 @@ class LIBTEMPORAL_API Tempo {
 			_type == other._type;
 	}
 
+	bool operator!= (Tempo const & other) const {
+		return _superclocks_per_note_type != other._superclocks_per_note_type ||
+			_end_superclocks_per_note_type != other._end_superclocks_per_note_type ||
+			_note_type != other._note_type ||
+			_active != other._active ||
+			_locked_to_meter != other._locked_to_meter ||
+			_clamped != other._clamped ||
+			_type != other._type;
+	}
+
   protected:
 	superclock_t _superclocks_per_note_type;
 	superclock_t _end_superclocks_per_note_type;
@@ -272,6 +283,7 @@ class LIBTEMPORAL_API Meter {
 	BBT_Time bbt_subtract (BBT_Time const & bbt, BBT_Offset const & sub) const;
 	BBT_Time round_to_bar (BBT_Time const &) const;
 	BBT_Time round_up_to_beat (BBT_Time const &) const;
+	BBT_Time round_to_beat (BBT_Time const &) const;
 	Beats    to_quarters (BBT_Offset const &) const;
 
 	XMLNode& get_state () const;
@@ -295,6 +307,13 @@ class LIBTEMPORAL_API MeterPoint : public Meter, public Point
 
 	Beats quarters_at (BBT_Time const & bbt) const;
 	BBT_Time bbt_at (Beats const & beats) const;
+
+	bool operator== (MeterPoint const & other) const {
+		return Meter::operator== (other) && Point::operator== (other);
+	}
+	bool operator!= (MeterPoint const & other) const {
+		return Meter::operator!= (other) || Point::operator!= (other);
+	}
 
 	XMLNode& get_state () const;
 };
@@ -332,6 +351,9 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 
 	bool operator== (TempoPoint const & other) const {
 		return Tempo::operator== (other) && Point::operator== (other);
+	}
+	bool operator!= (TempoPoint const & other) const {
+		return Tempo::operator!= (other) || Point::operator!= (other);
 	}
 
   private:
@@ -659,6 +681,9 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 
 	void solve (superclock_t sc, Beats & beats, BBT_Time & bbt) const;
 	void solve (Beats const & beats, superclock_t & sc, BBT_Time & bbt) const;
+
+	void reset_starting_at (superclock_t);
+	void reset_starting_at (Beats const &);
 };
 
 } /* end of namespace Temporal */

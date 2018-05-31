@@ -488,7 +488,7 @@ Drag::end_grab (GdkEvent* event)
 timepos_t
 Drag::adjusted_time (timepos_t const & f, GdkEvent const * event, bool snap) const
 {
-	timepos_t pos;
+	timepos_t pos (f);
 
 	if (f > _pointer_offset) {
 		pos = f.earlier (_pointer_offset);
@@ -3343,6 +3343,9 @@ MeterMarkerDrag::MeterMarkerDrag (Editor* e, ArdourCanvas::Item* i, bool c)
 	, before_state (0)
 {
 	DEBUG_TRACE (DEBUG::Drags, "New MeterMarkerDrag\n");
+
+	_movable = !e->session()->tempo_map().is_initial (_marker->meter());
+
 }
 
 void
@@ -3363,6 +3366,8 @@ void
 MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 {
 	TempoMap& map (_editor->session()->tempo_map());
+
+	cerr << "MMD:n\n";
 
 	if (first_move) {
 		// create a dummy marker to catch events, then hide it.
@@ -3402,6 +3407,7 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 				--bbt.bars;
 			}
 
+			cerr << "try to move meter to " << bbt << endl;
 			map.move_meter (meter, timepos_t (bbt));
 		}
 
@@ -3412,17 +3418,25 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 		}
 	}
 
-	timepos_t pf = adjusted_current_time (event);
+	if (_movable) {
 
-	if (map.time_domain() == AudioTime && _editor->snap_musical()) {
-		/* never snap to music for audio locked */
-		pf = adjusted_current_time (event, false);
+		timepos_t pos;
+
+		if (_editor->snap_musical()) {
+			/* we can't snap to a grid that we are about to move.
+			 * gui_move_tempo() will sort out snap using the supplied beat divisions.
+			*/
+			pos = adjusted_current_time (event, false);
+		} else {
+			pos = adjusted_current_time (event);
+		}
+
+		map.move_meter (_marker->meter(), pos, false);
+
+		show_verbose_cursor_time (timepos_t (_marker->point().beats()));
 	}
 
-	/* fake marker meeds to stay under the mouse, unlike the real one. */
-	_marker->set_position (adjusted_current_sample (event, false));
-
-	show_verbose_cursor_time (timepos_t (_marker->point().bbt()));
+	_marker->set_position (adjusted_current_time (event, false));
 }
 
 void
