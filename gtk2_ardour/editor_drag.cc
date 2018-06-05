@@ -184,7 +184,7 @@ DragManager::mark_double_click ()
 bool
 DragManager::motion_handler (GdkEvent* e, bool from_autoscroll)
 {
-	bool r = false;
+bool r = false;
 
 	/* calling this implies that we expect the event to have canvas
 	 * coordinates
@@ -3345,7 +3345,6 @@ MeterMarkerDrag::MeterMarkerDrag (Editor* e, ArdourCanvas::Item* i, bool c)
 	DEBUG_TRACE (DEBUG::Drags, "New MeterMarkerDrag\n");
 
 	_movable = !e->session()->tempo_map().is_initial (_marker->meter());
-
 }
 
 void
@@ -3367,8 +3366,6 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 {
 	TempoMap& map (_editor->session()->tempo_map());
 
-	cerr << "MMD:n\n";
-
 	if (first_move) {
 		// create a dummy marker to catch events, then hide it.
 
@@ -3380,8 +3377,7 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 			*_editor->meter_group,
 			UIConfiguration::instance().color ("meter marker"),
 			name,
-			*new Temporal::MeterPoint (_marker->meter())
-		);
+			_marker->meter());
 
 		/* use the new marker for the grab */
 		swap_grab (&_marker->the_item(), 0, GDK_CURRENT_TIME);
@@ -3395,7 +3391,6 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 		} else {
 			_editor->begin_reversible_command (_("copy meter mark"));
 
-
 			timepos_t const pointer = adjusted_current_time (event, false);
 			Temporal::MeterPoint const & meter = map.metric_at (pointer.bbt()).meter();
 			BBT_Time bbt = meter.bbt();
@@ -3407,8 +3402,7 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 				--bbt.bars;
 			}
 
-			cerr << "try to move meter to " << bbt << endl;
-			map.move_meter (meter, timepos_t (bbt));
+			_marker->reset_point (map.set_meter (meter, timepos_t (bbt)));
 		}
 
 		/* only snap to bars. leave snap mode alone for audio locked meters.*/
@@ -3418,14 +3412,12 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 		}
 	}
 
-	if (_movable) {
+	if (_movable && (!first_move || !_copy)) {
 
 		timepos_t pos;
 
 		if (_editor->snap_musical()) {
-			/* we can't snap to a grid that we are about to move.
-			 * gui_move_tempo() will sort out snap using the supplied beat divisions.
-			*/
+			/* not useful to try to snap to a grid we're about to change */
 			pos = adjusted_current_time (event, false);
 		} else {
 			pos = adjusted_current_time (event);
@@ -3435,8 +3427,6 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 
 		show_verbose_cursor_time (timepos_t (_marker->point().beats()));
 	}
-
-	_marker->set_position (adjusted_current_time (event, false));
 }
 
 void

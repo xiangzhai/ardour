@@ -136,6 +136,7 @@ Editor::draw_metric_marks (TempoMap::Metrics & metrics)
 		}
 
 	}
+
 	tempo_curves.sort (CurveComparator());
 
 	const double min_tempo_range = 5.0;
