@@ -3389,7 +3389,6 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 		if (!_copy) {
 			_editor->begin_reversible_command (_("move meter mark"));
 		} else {
-			_editor->begin_reversible_command (_("copy meter mark"));
 
 			timepos_t const pointer = adjusted_current_time (event, false);
 			Temporal::MeterPoint const & meter = map.metric_at (pointer.bbt()).meter();
@@ -3402,6 +3401,7 @@ MeterMarkerDrag::motion (GdkEvent* event, bool first_move)
 				--bbt.bars;
 			}
 
+			_editor->begin_reversible_command (_("copy meter mark"));
 			_marker->reset_point (map.set_meter (meter, timepos_t (bbt)));
 		}
 
@@ -3547,12 +3547,21 @@ TempoMarkerDrag::motion (GdkEvent* event, bool first_move)
 
 		} else {
 
-			const Tempo tempo (_marker->tempo());
-			const samplepos_t sample = adjusted_current_sample (event) + 1;
+			timepos_t const pointer = adjusted_current_time (event, false);
+			Temporal::TempoMetric metric = map.metric_at (pointer.bbt());
+			Temporal::MeterPoint const & meter = metric.meter();
+			Temporal::TempoPoint const & tempo = metric.tempo();
+			BBT_Time bbt = tempo.bbt();
+
+			/* we can't add a tempo where one currently exists */
+			if (bbt < pointer.bbt()) {
+				bbt = meter.bbt_add (bbt, BBT_Offset (0, 1, 0));
+			} else {
+				bbt = meter.bbt_add (bbt, BBT_Offset (0, -1, 0));
+			}
 
 			_editor->begin_reversible_command (_("copy tempo mark"));
-
-			_marker->reset_point (map.set_tempo (tempo, timepos_t (sample)));
+			_marker->reset_point (map.set_tempo (tempo, timepos_t (bbt)));
 
 #warning paul, need a return status from set_tempo
 #if 0
@@ -3563,6 +3572,11 @@ TempoMarkerDrag::motion (GdkEvent* event, bool first_move)
 #endif
 		}
 
+		/* only snap to beats. leave snap mode alone for audio locked meters.*/
+		if (map.time_domain() != AudioTime) {
+			_editor->set_snap_to (SnapToBeat);
+			_editor->set_snap_mode (SnapNormal);
+		}
 	}
 
 	if (ArdourKeyboard::indicates_constraint (event->button.state) && ArdourKeyboard::indicates_copy (event->button.state)) {

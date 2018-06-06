@@ -967,7 +967,7 @@ TempoMap::reset_starting_at (superclock_t sc)
 		for (m = _meters.begin(); m != _meters.end() && m->sclock() <= sc; ++m) {
 			current_meter = &*m;
 		}
-		for (b = _bartimes.begin(); t != _tempos.end() && b->sclock() <= sc; ++b);
+		for (b = _bartimes.begin(); b != _bartimes.end() && b->sclock() <= sc; ++b);
 	} else {
 		t = _tempos.begin();
 		m = _meters.begin();
@@ -1230,6 +1230,7 @@ TempoMap::move_tempo (TempoPoint const & tp, timepos_t const & when, bool push)
 
 		assert (time_domain() != BarTime);
 		assert (!_tempos.empty());
+		assert (!_meters.empty());
 
 		if (_tempos.size() < 2 || tp == _tempos.front()) {
 			/* not movable */
@@ -1240,6 +1241,7 @@ TempoMap::move_tempo (TempoPoint const & tp, timepos_t const & when, bool push)
 		Beats beats;
 		BBT_Time bbt;
 		TimeDomain td (time_domain());
+		bool round_up;
 
 		/* if time domains differ, then asking for the "when" value in
 		 * the map domain may involve a tempo map lookup. This requires
@@ -1253,9 +1255,19 @@ TempoMap::move_tempo (TempoPoint const & tp, timepos_t const & when, bool push)
 		switch (td) {
 		case AudioTime:
 			sc = S2Sc (when.sample());
+			if (sc > tp.sclock()) {
+				round_up = true;
+			} else {
+				round_up = false;
+			}
 			break;
 		case BeatTime:
 			beats = when.beats ();
+			if (beats > tp.beats ()) {
+				round_up = true;
+			} else {
+				round_up = false;
+			}
 			break;
 		}
 
@@ -1263,6 +1275,9 @@ TempoMap::move_tempo (TempoPoint const & tp, timepos_t const & when, bool push)
 			lm.acquire ();
 		}
 
+		/* Do not allow moving a tempo marker to the same position as
+		 * an existing one.
+		 */
 
 		Tempos::iterator t, prev_t;
 		Meters::iterator m, prev_m;
@@ -1311,17 +1326,29 @@ TempoMap::move_tempo (TempoPoint const & tp, timepos_t const & when, bool push)
 			return false;
 		}
 
-		if (_tempos.size() == 2) {
-			/* must be the 2nd of two, so just move it */
-			_tempos.back().set (sc, beats, bbt);
-		} else {
+		const superclock_t old_sc = tp.sclock();
 
-			Tempos::iterator t = find (_tempos.begin(), _tempos.end(), tp);
-			assert (t != _tempos.end());
-			_tempos.erase (t);
-			TempoPoint new_tp (*this, tp, sc, beats, bbt);
-			add_tempo (new_tp);
+		Tempos::iterator current = _tempos.end();
+		Tempos::iterator insert_before = _tempos.end();
+
+		for (Tempos::iterator t = _tempos.begin(); t != _tempos.end(); ++t) {
+			if (*t == tp) {
+				current = t;
+			}
+			if (insert_before == _tempos.end() && (t->sclock() > sc)) {
+				insert_before = t;
+			}
 		}
+
+		/* existing tempo must have been found */
+		assert (current != _tempos.end());
+
+		/* reset position of this tempo */
+		current->set (sc, beats, bbt);
+		/* reposition in list */
+		_tempos.splice (insert_before, _tempos, current);
+		/* recompute 3 domain positions for everything after this */
+		reset_starting_at (std::min (sc, old_sc));
 	}
 
 	Changed ();
