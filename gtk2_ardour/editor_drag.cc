@@ -3612,7 +3612,22 @@ TempoMarkerDrag::motion (GdkEvent* event, bool first_move)
 		show_verbose_cursor_time (timepos_t (_marker->point().beats()));
 	}
 
-	_marker->set_position (adjusted_current_time (event, false));
+
+	if (_movable && (!first_move || !_copy)) {
+
+		timepos_t pos;
+
+		if (_editor->snap_musical()) {
+			/* not useful to try to snap to a grid we're about to change */
+			pos = adjusted_current_time (event, false);
+		} else {
+			pos = adjusted_current_time (event);
+		}
+
+		map.move_tempo (_marker->tempo(), pos, false);
+
+		show_verbose_cursor_time (timepos_t (_marker->point().beats()));
+	}
 }
 
 void
