@@ -192,14 +192,20 @@ class LIBTEMPORAL_API Tempo {
 	superclock_t superclocks_per_note_type () const {
 		return _superclocks_per_note_type;
 	}
-	superclock_t end_superclocks_per_note_type () const {
-		return _end_superclocks_per_note_type;
-	}
 	superclock_t superclocks_per_note_type (int note_type) const {
 		return (_superclocks_per_note_type * _note_type) / note_type;
 	}
 	superclock_t superclocks_per_quarter_note () const {
 		return superclocks_per_note_type (4);
+	}
+	superclock_t end_superclocks_per_note_type () const {
+		return _end_superclocks_per_note_type;
+	}
+	superclock_t end_superclocks_per_note_type (int note_type) const {
+		return (_end_superclocks_per_note_type * _note_type) / note_type;
+	}
+	superclock_t end_superclocks_per_quarter_note () const {
+		return end_superclocks_per_note_type (4);
 	}
 	superclock_t superclocks_per_ppqn () const {
 		return superclocks_per_quarter_note() / ticks_per_beat;
@@ -329,8 +335,8 @@ class LIBTEMPORAL_API MeterPoint : public Meter, public Point
 class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 {
   public:
-	TempoPoint (TempoMap const & map, Tempo const & t, superclock_t sc, Beats const & b, BBT_Time const & bbt) : Tempo (t), Point (map, sc, b, bbt), _c_per_quarter (0), _c_per_superclock (0) {}
-	TempoPoint (Tempo const & t, Point const & p) : Tempo (t), Point (p), _c_per_quarter (0), _c_per_superclock (0) {}
+	TempoPoint (TempoMap const & map, Tempo const & t, superclock_t sc, Beats const & b, BBT_Time const & bbt) : Tempo (t), Point (map, sc, b, bbt), _omega (0.0) {}
+	TempoPoint (Tempo const & t, Point const & p) : Tempo (t), Point (p), _omega (0) {}
 	TempoPoint (TempoMap const & map, XMLNode const &);
 
 	/* just change the tempo component, without moving */
@@ -341,11 +347,10 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 
 	superclock_t superclock_at (Beats const & qn) const;
 
-	double c_per_superclock () const { return _c_per_superclock; }
-	double c_per_quarter () const { return _c_per_quarter; }
+	void compute_omega_superclock (samplecnt_t sr, superclock_t end_superclocks_per_note_type, superclock_t duration);
+	void compute_omega_quarters (samplecnt_t sr, superclock_t end_superclocks_per_note_type, Beats const & duration);
 
-	void compute_c_superclock (samplecnt_t sr, superclock_t end_superclocks_per_note_type, superclock_t duration);
-	void compute_c_quarters (samplecnt_t sr, superclock_t end_superclocks_per_note_type, Beats const & duration);
+	bool actually_ramped () const { return Tempo::ramped() && (_omega != 0); }
 
 	Beats quarters_at (superclock_t sc) const;
 
@@ -358,9 +363,12 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 		return Tempo::operator!= (other) || Point::operator!= (other);
 	}
 
+	superclock_t superclock_duration() const { return _superclock_duration; }
+	double omega() const { return _omega; }
+
   private:
-	double _c_per_quarter;
-	double _c_per_superclock;
+	double _omega;
+	superclock_t _superclock_duration;
 };
 
 /** Helper class to perform computations that require both Tempo and Meter
@@ -418,8 +426,11 @@ class LIBTEMPORAL_API TempoMetric {
 		return llrint (_tempo->superclocks_per_note_type() * ((double) _tempo->note_type() / _meter->note_value()));
 	}
 
-	superclock_t superclock_per_note_type_at_superclock (superclock_t sc) const {
-		return _tempo->superclocks_per_note_type () * expm1 (_tempo->c_per_superclock() * sc);
+	superclock_t superclocks_per_note_type_at_superclock (superclock_t sc) const {
+		if (!_tempo->actually_ramped()) {
+			return _tempo->superclocks_per_note_type ();
+		}
+		return _tempo->superclocks_per_note_type() * exp (-_tempo->omega() * (sc - _tempo->sclock()));
 	}
 
 	BBT_Time bbt_at (superclock_t sc) const;

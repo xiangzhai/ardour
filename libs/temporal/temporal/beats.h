@@ -83,8 +83,8 @@ public:
 	static Beats from_double (double beats) {
 		double       whole;
 		const double frac = modf (beats, &whole);
-
-		return Beats (whole, frac * PPQN);
+		std::cerr << "Beats::from_double (" << beats << ") = " << whole << '+' << frac << " => " << (int32_t) rint (frac * PPQN) << std::endl;
+		return Beats (whole, (int32_t) rint (frac * PPQN));
 	}
 
 	/** Create from an integer number of beats. */
