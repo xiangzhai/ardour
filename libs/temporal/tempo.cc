@@ -453,8 +453,8 @@ MeterPoint::get_state () const
 Temporal::BBT_Time
 TempoMetric::bbt_at (superclock_t sc) const
 {
-	const Beats q = _tempo->quarters_at (sc);
-	const BBT_Offset bbt_offset (0, q.get_beats(), q.get_ticks());
+	const Beats dq = _tempo->quarters_at (sc) - _meter->beats();
+	const BBT_Offset bbt_offset (0, dq.get_beats(), dq.get_ticks());
 	return _meter->bbt_add (_meter->bbt(), bbt_offset);
 }
 
