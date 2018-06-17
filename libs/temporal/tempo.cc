@@ -1710,16 +1710,27 @@ TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, uint32_t 
 		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("get grid between %1..%2 [ %4 .. %5 ] { %6 .. %7 } at bar_mod = %3\n",
 		                                                 pos, end, bar_mod, s, e, bbt, ebbt));
 
-		if ((metric.quarters_at (bbt) - metric.quarters_at (pos)).abs() > Beats::ticks (1)) {
-			cerr << "MM1: " << pos << " vs. " << metric.superclock_at (bbt) << " delta " << pos - metric.superclock_at (bbt) << endl;
+		if (metric.quarters_at (bbt).diff (metric.quarters_at (pos)) > Beats::ticks (1)) {
+			cerr << "MM1: " << pos << " / " << metric.quarters_at (pos) << " vs. "
+			     << metric.superclock_at (bbt) << " / " << metric.quarters_at (bbt)
+			     << " delta "
+			     << pos - metric.superclock_at (bbt)
+			     << " dB "
+			     << metric.quarters_at (bbt).diff (metric.quarters_at (pos))
+			     << "\n\tused " << metric
+			     << endl;
 			abort ();
 		}
 
-		if ((emetric.quarters_at (ebbt) - emetric.quarters_at (end)).abs() > Beats::ticks (1)) {
+		if (emetric.quarters_at (ebbt).diff (emetric.quarters_at (end)) > Beats::ticks (1)) {
 			cerr << "MM2: " << end << " / " << emetric.quarters_at (end) << " vs. "
-			     << metric_at_locked (end).superclock_at (ebbt) << " / " << emetric.quarters_at (ebbt)
+			     << emetric.superclock_at (ebbt) << " / " << emetric.quarters_at (ebbt)
 			     << " delta "
-			     << end - metric_at_locked(end).superclock_at (ebbt) << endl;
+			     << end - emetric.superclock_at (ebbt)
+			     << " dB "
+			     << emetric.quarters_at (ebbt).diff (emetric.quarters_at (end))
+			     << "\n\tused " << emetric
+			     << endl;
 			abort ();
 		}
 

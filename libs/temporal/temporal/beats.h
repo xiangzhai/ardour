@@ -252,6 +252,13 @@ public:
 		return Beats (::abs (_beats), ::abs (_ticks));
 	}
 
+	Beats diff (Beats const & other) const {
+		if (other > *this) {
+			return other - *this;
+		}
+		return *this - other;
+	}
+
 	inline bool operator==(const Beats& b) const {
 		return _beats == b._beats && _ticks == b._ticks;
 	}
