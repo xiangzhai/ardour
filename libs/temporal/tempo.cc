@@ -490,22 +490,7 @@ TempoPoint::TempoPoint (TempoMap const & map, XMLNode const & node)
 }
 
 void
-TempoPoint::compute_omega_superclock (samplecnt_t sr, superclock_t end_scpqn, superclock_t superclock_duration)
-{
-	if ((superclocks_per_quarter_note() == end_scpqn) || (_type == Constant)) {
-		_omega = 0.0;
-		_superclock_duration = 0;
-		cerr << "constant tempo, no ramp-S\n";
-		return;
-	}
-
-	_omega = (1.0/superclock_duration) * log ((double) superclocks_per_quarter_note() / end_scpqn);
-	_superclock_duration = superclock_duration;
-
-	cerr << "New Ramp-S = " << std::setprecision(12) << _omega << ' ' << superclock_duration << " from " << superclocks_per_quarter_note() << " to " << end_scpqn << endl;
-}
-void
-TempoPoint::compute_omega_quarters (samplecnt_t sr, superclock_t end_scpqn, Temporal::Beats const & quarter_duration)
+TempoPoint::compute_omega (samplecnt_t sr, superclock_t end_scpqn, Temporal::Beats const & quarter_duration)
 {
 	if ((superclocks_per_quarter_note () == end_scpqn) || (_type == Constant)) {
 		_omega = 0.0;
@@ -907,12 +892,9 @@ TempoMap::add_tempo (TempoPoint const & tp)
 	Tempos::iterator nxt = t;
 	++nxt;
 
-	cerr << "\n\n\n added tempo, ramped ? " << *t << " nxt == end ? " << (nxt == _tempos.end()) << endl;
-
 	if (t->ramped() && nxt != _tempos.end()) {
-		cerr << "\tcompute ramp between " << "\n\t\t" << *t << "\n\n\t" << *nxt << endl;
-		cerr << "\tcompute ramp over " << nxt->sclock() - t->sclock() << " and " << nxt->beats() - t->beats() << endl;
-		t->compute_omega_quarters (_sample_rate, nxt->superclocks_per_quarter_note (), nxt->beats() - t->beats());
+		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("compute ramp over %1 .. %2 aka %3 .. %4\n", t->sclock(), nxt->sclock(), t->beats(), nxt->beats()));
+		t->compute_omega (_sample_rate, nxt->superclocks_per_quarter_note (), nxt->beats() - t->beats());
 	}
 
 	reset_starting_at (tp.sclock());
@@ -1020,7 +1002,7 @@ TempoMap::reset_starting_at (superclock_t sc)
                /* UPDATE RAMP COEFFICIENTS WHEN NECESSARY */
 
 	       if (t->ramped() && nxt_tempo != _tempos.end()) {
-		       t->compute_omega_quarters (_sample_rate, nxt_tempo->superclocks_per_quarter_note (), nxt_tempo->beats() - t->beats());
+		       t->compute_omega (_sample_rate, nxt_tempo->superclocks_per_quarter_note (), nxt_tempo->beats() - t->beats());
 	       }
 
 	       /* figure out which of the 1, 2 or 3 possible iterators defines the next explicit point (we want the earliest on the timeline,
@@ -1401,7 +1383,7 @@ TempoMap::move_tempo (TempoPoint const & tp, timepos_t const & when, bool push)
                /* Update ramp coefficients when necessary */
 
 	       if (current->ramped() && insert_before != _tempos.end()) {
-		       current->compute_omega_quarters (_sample_rate, insert_before->superclocks_per_quarter_note (), insert_before->beats() - current->beats());
+		       current->compute_omega (_sample_rate, insert_before->superclocks_per_quarter_note (), insert_before->beats() - current->beats());
 	       }
 
 		/* recompute 3 domain positions for everything after this */

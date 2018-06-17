@@ -347,8 +347,7 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 
 	superclock_t superclock_at (Beats const & qn) const;
 
-	void compute_omega_superclock (samplecnt_t sr, superclock_t end_superclocks_per_note_type, superclock_t duration);
-	void compute_omega_quarters (samplecnt_t sr, superclock_t end_superclocks_per_note_type, Beats const & duration);
+	void compute_omega (samplecnt_t sr, superclock_t end_superclocks_per_note_type, Beats const & duration);
 
 	bool actually_ramped () const { return Tempo::ramped() && (_omega != 0); }
 
