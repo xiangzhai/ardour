@@ -494,7 +494,6 @@ TempoPoint::compute_omega (samplecnt_t sr, superclock_t end_scpqn, Temporal::Bea
 {
 	if ((superclocks_per_quarter_note () == end_scpqn) || (_type == Constant)) {
 		_omega = 0.0;
-		cerr << "constant tempo, no ramp-C\n";
 		return;
 	}
 
@@ -507,17 +506,13 @@ superclock_t
 TempoPoint::superclock_at (Temporal::Beats const & qn) const
 {
 	if (qn == _quarters) {
-		cerr << *this << " at delta=zero " << endl;
 		return _sclock;
 	}
 
 	if (!actually_ramped()) {
 		/* not ramped, use linear */
-		cerr << *this << " NOT RAMPED, LINEAR INTERPOLATE\n";
 		return _sclock + llrint (superclocks_per_quarter_note () * (qn - _quarters).to_double());
 	}
-
-	cerr << "Use RAMP-C with " << std::setprecision (12) << _omega << " across " << (qn - _quarters) << endl;
 
 	return _sclock + llrint (log1p (superclocks_per_quarter_note() * _omega * (qn - _quarters).to_double()) / _omega);
 }
@@ -530,11 +525,6 @@ TempoPoint::quarters_at (superclock_t sc) const
 	}
 
 	const double b = (exp (_omega * (sc - _sclock)) - 1) / (superclocks_per_quarter_note() * _omega);
-
-	cerr << " fd says " << b
-	     << " + " << _quarters
-	     << endl;
-
 	return _quarters + Beats::from_double (b);
 }
 
@@ -554,7 +544,6 @@ Temporal::Beats
 MeterPoint::quarters_at (Temporal::BBT_Time const & bbt) const
 {
 	Temporal::BBT_Offset offset = bbt_delta (bbt, _bbt);
-	cerr << "compute Q@" << bbt << " via " << _quarters << " + " << offset << " as q " << to_quarters (offset) << endl;
 	return _quarters + to_quarters (offset);
 }
 
@@ -1830,13 +1819,11 @@ TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, uint32_t 
 		if (nxt_t != _tempos.end() && limit >= nxt_t->sclock()) {
 			first_of_three = &*nxt_t;
 			limit = first_of_three->sclock();
-			cerr << "Limit from subsequent tempo " << *nxt_t << endl;
 		}
 
 		if (nxt_m != _meters.end() && limit >= nxt_m->sclock()) {
 			first_of_three = &*nxt_m;
 			limit = first_of_three->sclock();
-			cerr << "Limit from subsequent meter " << *nxt_m << endl;
 		}
 
 		if (nxt_b != _bartimes.end() && limit >= nxt_b->sclock()) {
@@ -1868,8 +1855,6 @@ TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, uint32_t 
 
 		/* Inner loop: add grid points until we hit limit, which is defined by either @param e or the next marker of some kind */
 
-		cerr << "Start inner loop with limit = " << limit <<  " pos at " << pos << endl;
-
 		do {
 
 			/* we already have the superclock and BBT time for the next point, either computed before the loop, or at the bottom of this one.
@@ -1889,18 +1874,15 @@ TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, uint32_t 
 			if (bar_mod == 0) {
 
 				step = metric.superclocks_per_note_type_at_superclock (pos);
-				cerr << "\t... step forward by 1 grid size = " << step << " tempo = " << (superclock_ticks_per_second * 60) / step << endl;
 				pos += step;
 
 			} else {
 
 				bbt.bars += bar_mod;
-				cerr << "\t... move on to next bar @ " << bbt << endl;
 
 				/* could have invalidated the current metric */
 
 				if (first_of_three && (bbt > first_of_three->bbt())) {
-					cerr << "\t... stepped passed next marker @ " << first_of_three->bbt() << endl;
 					pos = first_of_three->sclock();
 					break;
 				}
@@ -1910,18 +1892,15 @@ TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, uint32_t 
 				*/
 
 				pos = metric.superclock_at (bbt);
-				cerr << "new pos is " << pos << endl;
 			}
 
 			if (pos >= limit) {
-				cerr << pos << " past limit of " << limit << " back to outer\n";
 				/* go back to outer loop to advance iterators and get a new metric */
 				break;
 			}
 
 			if (bar_mod == 0) {
 				bbt = metric.bbt_at (pos);
-				cerr << "computed new BBT for barmod-zero pos " << pos << " as " << bbt << endl;
 			}
 
 		} while (true);
@@ -1972,11 +1951,7 @@ TempoMap::get_grid (TempoMapPoints& ret, samplepos_t s, samplepos_t e, uint32_t 
 
 						/* not usable */
 
-						cerr << "Skip " << bbt << " because it doesn't fit " << bar_mod << endl;
-
 						bbt = bbt.round_up_to_bar ();
-
-						cerr << "new bbt position: " << bbt << endl;
 
 						/* reset iterators for new position */
 
