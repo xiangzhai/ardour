@@ -500,7 +500,7 @@ TempoPoint::compute_omega (samplecnt_t sr, superclock_t end_scpqn, Temporal::Bea
 
 	_omega = ((1.0/end_scpqn) - (1.0/superclocks_per_quarter_note())) / quarter_duration.to_double();
 
-	cerr << "New Ramp-C = " << std::setprecision(12) << _omega << endl;
+	DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("New Ramp-C = %1%2 dur was %3\n", std::setprecision(12),_omega, quarter_duration.to_double()));
 }
 
 superclock_t
