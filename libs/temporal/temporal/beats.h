@@ -69,9 +69,10 @@ public:
 			ticks -= PPQN;
 		}
 
-		// Set fields with appropriate sign
+		// Set beats with appropriate sign. Note that we already solved
+		// for ticks being negative above, and it should never be
+		// negative in a normalized state.
 		_beats = sign * beats;
-		_ticks = sign * ticks;
 	}
 
 	/** Create from a precise BT time. */
