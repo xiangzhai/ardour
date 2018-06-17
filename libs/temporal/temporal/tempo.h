@@ -40,33 +40,14 @@
 
 /* A tempo map is built from 4 types of entities
 
-   1) points that define tempo
-   2) points that define meter
-   3) points that define the position of a specific beat
-   4) labels attached to points that provide their BBT time
-
-   Each point that defines tempo and meter must also be a point that defines
-   the position of a beat - that is, tempo and meter changes always fall on
-   beat positions. In addition, meter changes must always be on a point that
-   begins a new measure or bar.
-
-   The user can directly manipulate any of these 4 entities.
-
-   Tempo: tempo related properties and position can be changed.
-   Meter: meter related properties and position can be changed.
-   Beat locations: position can be changed.
-   BBT labels: BBT time can be changed.
-
-   All points have a position defined by a superclock_t value.
+   1) tempo markers
+   2) meter (time signature) markers
+   4) position markers
 
    Beats increase monotonically throughout the tempo map (BBT may not).
 
    The map has a single time domain at any time, and can only be using either
    AudioTime or BeatTime. BarTime is not legal as a map time domain.
-
-   When the map is using AudioTime as its time domain, .... [ what? ]
-
-   When the map is using BarTime as its time domain, .... [ what? ]
 */
 
 
