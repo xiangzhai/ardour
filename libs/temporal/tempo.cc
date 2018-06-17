@@ -597,15 +597,9 @@ MeterPoint::get_state () const
 Temporal::BBT_Time
 TempoMetric::bbt_at (superclock_t sc) const
 {
-	if (_tempo->sclock() > _meter->sclock()) {
-		const superclock_t sc_delta = sc - _tempo->sclock();
-		const superclock_t sppqn = superclocks_per_ppqn();
-		return _meter->bbt_add (_tempo->bbt(), Temporal::BBT_Offset (0, 0, (sc_delta / sppqn) + (sc_delta % sppqn ? 1 : 0)));
-	} else {
-		const superclock_t sc_delta = sc - _meter->sclock();
-		const superclock_t sppqn = superclocks_per_ppqn();
-		return _meter->bbt_add (_meter->bbt(), Temporal::BBT_Offset (0, 0, (sc_delta / sppqn) + (sc_delta % sppqn ? 1 : 0)));
-	}
+	const Beats q = _tempo->quarters_at (sc);
+	const BBT_Offset bbt_offset (0, q.get_beats(), q.get_ticks());
+	return _meter->bbt_add (_meter->bbt(), bbt_offset);
 }
 
 superclock_t
