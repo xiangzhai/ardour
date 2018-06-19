@@ -29,7 +29,6 @@ public:
 	static void setup_sizes (const double timebar_height);
 
 	ArdourCanvas::Item& the_item() const;
-	void canvas_height_set (double);
 
 	void set_position (samplepos_t lower, samplepos_t upper);
 	void set_color_rgba (uint32_t rgba);
@@ -58,7 +57,6 @@ protected:
 	samplepos_t    sample_position;
 	samplepos_t    _end_sample;
 	bool         _shown;
-	double       _canvas_height;
 	uint32_t     _color;
 
 	void reposition ();

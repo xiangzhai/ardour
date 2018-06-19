@@ -122,10 +122,19 @@ class LIBTEMPORAL_API Point {
 	void map_reset_set_sclock_for_sr_change (superclock_t sc) { _sclock = sc; }
 };
 
+class LIBTEMPORAL_API Rampable {
+  protected:
+	virtual ~Rampable() {}
+
+  private:
+	friend class TempoMap;
+	virtual bool set_ramped (bool yn) = 0;
+};
+
 /** Tempo, the speed at which musical time progresses (BPM).
  */
 
-class LIBTEMPORAL_API Tempo {
+class LIBTEMPORAL_API Tempo : public Rampable {
   public:
 	enum Type {
 		Ramped,
@@ -204,9 +213,9 @@ class LIBTEMPORAL_API Tempo {
 	Type type() const { return _type; }
 
 	bool ramped () const { return _type != Constant; }
-	bool set_ramped (bool yn);
 
 	XMLNode& get_state () const;
+	int set_state (XMLNode const&, int version);
 
 	bool operator== (Tempo const & other) const {
 		return _superclocks_per_note_type == other._superclocks_per_note_type &&
@@ -239,6 +248,9 @@ class LIBTEMPORAL_API Tempo {
 
 	static inline double       sc_to_double_npm (superclock_t sc) { return (superclock_ticks_per_second * 60.0) / sc; }
 	static inline superclock_t double_npm_to_sc (double npm) { return llrint ((superclock_ticks_per_second / npm) * 60.0); }
+
+  private:
+	bool set_ramped (bool yn);
 };
 
 /** Meter, or time signature (subdivisions per bar, and which note type is a single subdivision). */
@@ -276,6 +288,7 @@ class LIBTEMPORAL_API Meter {
 	Beats    to_quarters (BBT_Offset const &) const;
 
 	XMLNode& get_state () const;
+	int set_state (XMLNode const&, int version);
 
   protected:
 	/** The type of "note" that a division represents.  For example, 4 is
@@ -334,7 +347,13 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 
 	Beats quarters_at (superclock_t sc) const;
 
+	superclock_t superclocks_per_note_type_at (timepos_t const &) const;
+	double note_types_per_minute_at (timepos_t const & pos) const {
+		return Tempo::sc_to_double_npm (superclocks_per_note_type_at (pos));
+	}
+
 	XMLNode& get_state () const;
+	int set_state (XMLNode const&, int version);
 
 	bool operator== (TempoPoint const & other) const {
 		return Tempo::operator== (other) && Point::operator== (other);
@@ -343,12 +362,10 @@ class LIBTEMPORAL_API TempoPoint : public Tempo, public Point
 		return Tempo::operator!= (other) || Point::operator!= (other);
 	}
 
-	superclock_t superclock_duration() const { return _superclock_duration; }
 	double omega() const { return _omega; }
 
   private:
 	double _omega;
-	superclock_t _superclock_duration;
 };
 
 /** Helper class to perform computations that require both Tempo and Meter
@@ -519,6 +536,8 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 	~TempoMap();
 
 	void set_dirty (bool yn);
+
+	bool set_ramped (TempoPoint&, bool);
 
 	void set_sample_rate (samplecnt_t sr);
 	samplecnt_t sample_rate() const { return _sample_rate; }

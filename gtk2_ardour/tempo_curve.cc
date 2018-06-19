@@ -1,4 +1,7 @@
 #include <sigc++/bind.h>
+
+#include <temporal/timeline.h>
+
 #include "ardour/tempo.h"
 
 #include "canvas/rectangle.h"
@@ -17,6 +20,8 @@
 #include <gtkmm2ext/utils.h>
 
 #include "pbd/i18n.h"
+
+using Temporal::timepos_t;
 
 PBD::Signal1<void,TempoCurve*> TempoCurve::CatchDeletion;
 
@@ -100,12 +105,6 @@ void TempoCurve::reparent(ArdourCanvas::Container & parent)
 	_parent = &parent;
 }
 
-void
-TempoCurve::canvas_height_set (double h)
-{
-	_canvas_height = h;
-}
-
 ArdourCanvas::Item&
 TempoCurve::the_item() const
 {
@@ -145,7 +144,7 @@ TempoCurve::set_position (samplepos_t sample, samplepos_t end_sample)
 		samplepos_t current_sample = sample;
 
 		while (current_sample < end_sample) {
-			const double tempo_at = _point.note_types_per_minute();
+			const double tempo_at = _point.note_types_per_minute_at (timepos_t (current_sample));
 			const double y_pos = max ((curve_height) - (((tempo_at - _min_tempo) / (_max_tempo - _min_tempo)) * curve_height), 0.0);
 
 			points->push_back (ArdourCanvas::Duple (editor.sample_to_pixel (current_sample - sample), min (y_pos, curve_height)));

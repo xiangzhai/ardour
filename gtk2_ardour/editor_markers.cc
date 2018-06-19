@@ -1408,12 +1408,12 @@ Editor::toggle_tempo_type ()
 	dynamic_cast_marker_object (marker_menu_item->get_data ("marker"), &mm, &tm);
 
 	if (tm) {
-		Temporal::Tempo & tempo = tm->tempo();
+		Temporal::TempoPoint & tempo = tm->tempo();
 
 		begin_reversible_command (_("set tempo to constant"));
 		XMLNode &before = _session->tempo_map().get_state();
 
-		tempo.set_ramped (!tempo.ramped());
+		_session->tempo_map().set_ramped (tempo, !tempo.ramped());
 
 		XMLNode &after = _session->tempo_map().get_state();
 		_session->add_command(new MementoCommand<Temporal::TempoMap>(_session->tempo_map(), &before, &after));
@@ -1456,8 +1456,8 @@ Editor::ramp_to_next_tempo ()
 		begin_reversible_command (_("ramp to next tempo"));
 		XMLNode &before = _session->tempo_map().get_state();
 
-		Temporal::Tempo & tempo (tm->tempo());
-		if (tempo.set_ramped (!tempo.ramped())) {
+		Temporal::TempoPoint & tempo (tm->tempo());
+		if (_session->tempo_map().set_ramped (tempo, !tempo.ramped())) {
 			XMLNode &after = _session->tempo_map().get_state();
 			_session->add_command(new MementoCommand<Temporal::TempoMap>(_session->tempo_map(), &before, &after));
 			commit_reversible_command ();

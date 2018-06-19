@@ -103,9 +103,9 @@ Tempo::Tempo (XMLNode const & node)
 }
 
 bool
-Tempo::set_ramped (bool)
+Tempo::set_ramped (bool yn)
 {
-#warning implement Tempo::set_ramped
+	_type = (yn ? Ramped : Constant);
 	return true;
 }
 
@@ -130,6 +130,22 @@ Tempo::get_state () const
 	return *node;
 }
 
+int
+Tempo::set_state (XMLNode const & node, int /*version*/)
+{
+	if (node.name() != xml_node_name) {
+		return -1;
+	}
+
+	node.get_property (X_("scpnt-start"), _superclocks_per_note_type);
+	node.get_property (X_("scpnt-end"), _end_superclocks_per_note_type);
+	node.get_property (X_("note-type"), _note_type);
+	node.get_property (X_("type"), _type);
+	node.get_property (X_("active"), _active);
+
+	return 0;
+}
+
 Meter::Meter (XMLNode const & node)
 {
 	assert (node.name() == xml_node_name);
@@ -148,6 +164,19 @@ Meter::get_state () const
 	node->set_property (X_("note-value"), note_value());
 	node->set_property (X_("divisions-per-bar"), divisions_per_bar());
 	return *node;
+}
+
+int
+Meter::set_state (XMLNode const & node, int /* version */)
+{
+	if (node.name() != xml_node_name) {
+		return -1;
+	}
+
+	node.get_property (X_("note-value"), _note_value);
+	node.get_property (X_("divisions-per-bar"), _divisions_per_bar);
+
+	return 0;
 }
 
 Temporal::BBT_Time
@@ -355,11 +384,24 @@ Meter::to_quarters (Temporal::BBT_Offset const & offset) const
 	return Beats (ticks/Beats::PPQN, ticks%Beats::PPQN);
 }
 
+int
+TempoPoint::set_state (XMLNode const & node, int version)
+{
+	int ret;
+
+	if ((ret = Tempo::set_state (node, version)) == 0) {
+		node.get_property (X_("omega"), _omega);
+	}
+
+	return ret;
+}
+
 XMLNode&
 TempoPoint::get_state () const
 {
 	XMLNode& base (Tempo::get_state());
 	Point::add_state (base);
+	base.set_property (X_("omega"), _omega);
 	return base;
 }
 
@@ -367,11 +409,10 @@ TempoPoint::TempoPoint (TempoMap const & map, XMLNode const & node)
 	: Tempo (node)
 	, Point (map, node)
 	, _omega (0)
-	, _superclock_duration (0)
 {
 }
 
-/* To understand the math(s) behind ramping, see the file doc/tempo.{pdf,tex} 
+/* To understand the math(s) behind ramping, see the file doc/tempo.{pdf,tex}
  */
 
 void
@@ -400,6 +441,16 @@ TempoPoint::superclock_at (Temporal::Beats const & qn) const
 	}
 
 	return _sclock + llrint (log1p (superclocks_per_quarter_note() * _omega * (qn - _quarters).to_double()) / _omega);
+}
+
+superclock_t
+TempoPoint::superclocks_per_note_type_at (timepos_t const &pos) const
+{
+	if (!actually_ramped()) {
+		return _superclocks_per_note_type;
+	}
+
+	return _superclocks_per_note_type * exp (-_omega * (samples_to_superclock (pos.sample(), _map->sample_rate())));
 }
 
 Temporal::Beats
@@ -869,13 +920,13 @@ TempoMap::reset_starting_at (superclock_t sc)
 		current_tempo = &*t;
 	}
 
-	Tempos::iterator nxt_tempo = _tempos.end();
+	Tempos::iterator nxt_tempo = _tempos.begin();
 
 	while ((t != _tempos.end()) || (m != _meters.end()) || (b != _bartimes.end())) {
 
                /* UPDATE RAMP COEFFICIENTS WHEN NECESSARY */
 
-	       if (t->ramped() && nxt_tempo != _tempos.end()) {
+		if (t->ramped() && (nxt_tempo != _tempos.begin()) && (nxt_tempo != _tempos.end())) {
 		       t->compute_omega (_sample_rate, nxt_tempo->superclocks_per_quarter_note (), nxt_tempo->beats() - t->beats());
 	       }
 
@@ -956,9 +1007,8 @@ TempoMap::reset_starting_at (superclock_t sc)
                }
                if (advance_tempo && (t != _tempos.end())) {
                        ++t;
-                       if (nxt_tempo != _tempos.end()) {
-                               ++nxt_tempo;
-                       }
+                       nxt_tempo = t;
+                       ++nxt_tempo;
                }
                if (advance_bartime && (b != _bartimes.end())) {
                        ++b;
@@ -2772,6 +2822,17 @@ TempoMap::metric_at_locked (BBT_Time const & bbt, bool can_match) const
 	 */
 
 	return TempoMetric (*const_cast<TempoPoint*>(&*prev_t), *const_cast<MeterPoint*> (&*prev_m));
+}
+
+bool
+TempoMap::set_ramped (TempoPoint & tp, bool yn)
+{
+	Rampable & r (tp);
+	bool ret = r.set_ramped (yn);
+	if (ret) {
+		reset_starting_at (tp.sclock());
+	}
+	return ret;
 }
 
 #if 0
