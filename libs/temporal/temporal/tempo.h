@@ -547,6 +547,9 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 
 	void change_tempo (TempoPoint&, Tempo const &);
 
+	MusicTimePoint & set_bartime (BBT_Time const &, timepos_t const &);
+	void remove_bartime (MusicTimePoint const & tp);
+
 	TempoPoint & set_tempo (Tempo const &, BBT_Time const &);
 	TempoPoint & set_tempo (Tempo const &, Beats const &);
 	TempoPoint & set_tempo (Tempo const &, timepos_t const &);
@@ -689,10 +692,7 @@ class LIBTEMPORAL_API TempoMap : public PBD::StatefulDestructible
 
 	TempoPoint* add_tempo (TempoPoint const &);
 	MeterPoint* add_meter (MeterPoint const &);
-	MusicTimePoint* add_music_time_point (MusicTimePoint const &);
-
-	void solve (superclock_t sc, Beats & beats, BBT_Time & bbt) const;
-	void solve (Beats const & beats, superclock_t & sc, BBT_Time & bbt) const;
+	MusicTimePoint* add_or_replace_bartime (MusicTimePoint const &);
 
 	void reset_starting_at (superclock_t);
 	void reset_starting_at (Beats const &);

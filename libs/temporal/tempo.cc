@@ -560,6 +560,7 @@ TempoMap::TempoMap (Tempo const & initial_tempo, Meter const & initial_meter, sa
 
 	_tempos.push_back (TempoPoint (*this, initial_tempo, 0, Beats(), BBT_Time()));
 	_meters.push_back (MeterPoint (*this, initial_meter, 0, Beats(), BBT_Time()));
+	_bartimes.push_back (MusicTimePoint (*this));
 
 	set_dirty (true);
 }
@@ -849,32 +850,88 @@ TempoMap::remove_tempo (TempoPoint const & tp)
 	Changed ();
 }
 
-/** Given a superclock time, compute the Beat time and BBT_Time using only Tempo and
- * Meter points
- */
-void
-TempoMap::solve (superclock_t sc, Beats & beats, BBT_Time & bbt) const
+MusicTimePoint &
+TempoMap::set_bartime (BBT_Time const & bbt, timepos_t const & pos)
 {
-	/* CALLER MUST HOLD LOCK */
+	MusicTimePoint * ret;
 
-	TempoMetric tm (metric_at_locked (sc, false));
+	assert (pos.time_domain() == AudioTime);
 
-	beats = tm.quarters_at (sc);
-	bbt = tm.bbt_add (tm.meter().bbt(), Temporal::BBT_Offset (0, 0, (beats - tm.meter().beats()).to_ticks()));
+	{
+		TraceableWriterLock lm (_lock);
+		superclock_t sc (S2Sc (pos.sample()));
+
+		TempoMetric metric (metric_at_locked (sc));
+
+		MusicTimePoint tp (bbt, Point (*this, S2Sc (pos.sample()), metric.quarters_at (sc), bbt));
+
+		ret = add_or_replace_bartime (tp);
+	}
+
+	Changed ();
+
+	return *ret;
 }
 
-/** Given a Beat time, compute the superclock and BBT_Time using only Tempo and
- * Meter points
- */
-void
-TempoMap::solve (Beats const & beats, superclock_t & sc, BBT_Time & bbt) const
+MusicTimePoint*
+TempoMap::add_or_replace_bartime (MusicTimePoint const & tp)
 {
 	/* CALLER MUST HOLD LOCK */
 
-	TempoMetric tm (metric_at_locked (beats, false));
+	MusicTimes::iterator m;
 
-	sc = tm.superclock_at (beats);
-	bbt = tm.bbt_add (tm.meter().bbt(), Temporal::BBT_Offset (0, 0, (beats - tm.meter().beats()).to_ticks()));
+	for (m = _bartimes.begin(); m != _bartimes.end() && m->sclock() < tp.sclock(); ++m);
+
+	bool replaced = false;
+	MusicTimePoint* ret = 0;
+
+	if (m != _bartimes.end()) {
+		if (m->sclock() == tp.sclock()) {
+			/* overwrite the point with */
+			*m = tp;
+			ret = &(*m);
+			DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("overwrote old bartime with %1\n", tp));
+			replaced = true;
+		}
+	}
+
+	if (!replaced) {
+		m = _bartimes.insert (m, tp);
+		ret = &*m;
+		DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("inserted bartime %1\n", tp));
+	}
+
+	/* m is guaranteed not to be _bartimes.end() : it was either the
+	 * TempoPoint we overwrote, or its the one we inserted.
+	 */
+
+	assert (m != _bartimes.end());
+
+	reset_starting_at (tp.sclock());
+
+	set_dirty (true);
+
+	return ret;
+}
+
+void
+TempoMap::remove_bartime (MusicTimePoint const & tp)
+{
+	{
+		TraceableWriterLock lm (_lock);
+		superclock_t sc (tp.sclock());
+		MusicTimes::iterator m;
+		for (m = _bartimes.begin(); m != _bartimes.end() && m->sclock() < tp.sclock(); ++m);
+		if (m->sclock() != tp.sclock()) {
+			/* error ... no tempo point at the time of tp */
+			return;
+		}
+		_bartimes.erase (m);
+		reset_starting_at (sc);
+		set_dirty (true);
+	}
+
+	Changed ();
 }
 
 void
@@ -982,24 +1039,12 @@ TempoMap::reset_starting_at (superclock_t sc)
                }
 
                if (!is_bartime) {
-	               /* Axioms of the tempo map:
-	                *
-	                *  - meter changes occur on bar start positions
-	                *  - tempo changes occur on beat positions
-	                *
-	                * if we were to lock meter/tempo changes to audio time,
-	                * we cannot ensure that these axioms remain in force.
-	                *
-	                * Ergo, these markers are never locked to audio
-	                * time. They always remain at the bar/beat position
-	                * they were at RELATIVE TO THE CHANGE THAT WAS MADE.
-	                */
-
 	               superclock_t sc = metric.superclock_at (first_of_three->bbt());
 	               DEBUG_TRACE (DEBUG::TemporalMap, string_compose ("\tbased on %1 move to %2,%3\n", first_of_three->bbt(), sc, first_of_three->beats()));
 	               first_of_three->set (sc, first_of_three->beats(), first_of_three->bbt());
                } else {
-	               /* ??? */
+
+
                }
 
                if (advance_meter && (m != _meters.end())) {
