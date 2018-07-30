@@ -3670,7 +3670,7 @@ Session::set_dirty ()
 	}
 
 	/* never mark session dirty during loading */
-	if (_state_of_the_state & Loading) {
+	if (_state_of_the_state & (Loading | Deletion)) {
 		return;
 	}
 
