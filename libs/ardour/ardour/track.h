@@ -140,7 +140,6 @@ public:
 	int internal_playback_seek (samplecnt_t);
 	void non_realtime_locate (samplepos_t);
 	void realtime_handle_transport_stopped ();
-	void non_realtime_speed_change ();
 	int overwrite_existing_buffers ();
 	samplecnt_t get_captured_samples (uint32_t n = 0) const;
 	void transport_looped (samplepos_t);

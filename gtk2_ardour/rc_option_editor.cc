@@ -3221,6 +3221,8 @@ RCOptionEditor::RCOptionEditor ()
 
 	add_option (_("Sync"), _sync_framerate);
 
+	// XXX TRANSPORTMASTER
+#if 0
 	_sync_genlock = new BoolOption (
 		"timecode-source-is-synced",
 		_("Sync-lock timecode to clock (disable drift compensation)"),
@@ -3241,6 +3243,7 @@ RCOptionEditor::RCOptionEditor ()
 
 
 	add_option (_("Sync"), _sync_genlock);
+#endif
 
 	_sync_source_2997 = new BoolOption (
 		"timecode-source-2997",

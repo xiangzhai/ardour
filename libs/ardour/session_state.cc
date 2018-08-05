@@ -127,6 +127,7 @@
 #include "ardour/template_utils.h"
 #include "ardour/tempo.h"
 #include "ardour/ticker.h"
+#include "ardour/transport_master_manager.h"
 #include "ardour/types_convert.h"
 #include "ardour/user_bundle.h"
 #include "ardour/vca.h"
@@ -1452,12 +1453,7 @@ Session::state (bool save_template, snapshot_t snapshot_type, bool only_used_ass
 		gain_child->add_child_nocopy (_click_gain->get_state ());
 	}
 
-	if (_ltc_input) {
-		XMLNode* ltc_input_child = node->add_child ("LTC-In");
-		ltc_input_child->add_child_nocopy (_ltc_input->get_state ());
-	}
-
-	if (_ltc_input) {
+	if (_ltc_output) {
 		XMLNode* ltc_output_child = node->add_child ("LTC-Out");
 		ltc_output_child->add_child_nocopy (_ltc_output->get_state ());
 	}
@@ -1496,8 +1492,7 @@ Session::state (bool save_template, snapshot_t snapshot_type, bool only_used_ass
 XMLNode&
 Session::get_control_protocol_state ()
 {
-	ControlProtocolManager& cpm (ControlProtocolManager::instance());
-	return cpm.get_state();
+	return ControlProtocolManager::instance().get_state ();
 }
 
 int
@@ -4077,9 +4072,9 @@ Session::config_changed (std::string p, bool ours)
 
 	} else if (p == "external-sync") {
 		if (!config.get_external_sync()) {
-			drop_sync_source ();
+			TransportMasterManager::instance().set_current (UI);
 		} else {
-			switch_to_sync_source (Config->get_sync_source());
+			TransportMasterManager::instance().set_current (Config->get_sync_source());
 		}
 	}  else if (p == "denormal-model") {
 		setup_fpu ();

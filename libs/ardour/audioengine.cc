@@ -55,6 +55,7 @@
 #include "ardour/process_thread.h"
 #include "ardour/rc_configuration.h"
 #include "ardour/session.h"
+#include "ardour/transport_master_manager.h"
 
 #include "pbd/i18n.h"
 
@@ -346,6 +347,14 @@ AudioEngine::process_callback (pframes_t nframes)
 		return 0;
 	}
 
+	TransportMasterManager& tmm (TransportMasterManager::instance());
+
+	/* make sure the TMM is up to date about the current session */
+
+	if (_session != tmm.session()) {
+		tmm.set_session (_session);
+	}
+
 	if (_session == 0) {
 
 		if (!_freewheeling) {
@@ -358,16 +367,9 @@ AudioEngine::process_callback (pframes_t nframes)
 	}
 
 	if (!_freewheeling || Freewheel.empty()) {
-		// TODO: Run a list of slaves here
-		// - multiple TC slaves (how_many_dsp_threads() in parallel)
-		//   (note this can be multiple slaves of each type. e.g.
-		//    3 LTC slaves on different ports, 2 MTC..)
-		// - GUI can display all slaves, user picks one.
-		// - active "slave" is a session property.
-		// - here we ask the session about the active slave
-		//   and get playback speed (for this cycle) here.
-		// - Internal Transport is-a Slave too (!)
-		Port::set_speed_ratio (_session->engine_speed ()); // HACK
+		const double session_speed = tmm.pre_process_transport_masters (nframes, _session->transport_sample());
+		DEBUG_TRACE (DEBUG::Slave, string_compose ("session computed speed-to-follow-master as ^1\n", session_speed));
+		Port::set_speed_ratio (session_speed);
 	}
 
 	/* tell all relevant objects that we're starting a new cycle */
@@ -455,6 +457,10 @@ AudioEngine::process_callback (pframes_t nframes)
 		session_removal_gain -= (nframes * session_removal_gain_step);
 	} else {
 		PortManager::cycle_end (nframes, _session);
+	}
+
+	if (!_freewheeling || Freewheel.empty()) {
+		tmm.post_process_transport_masters (nframes);
 	}
 
 	_processed_samples = next_processed_samples;

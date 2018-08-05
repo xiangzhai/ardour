@@ -121,12 +121,18 @@ AudioPort::get_audio_buffer (pframes_t nframes)
 {
 	/* caller must hold process lock */
 	assert (_port_handle);
+
+	Sample* addr;
+
 	if (!externally_connected ()) {
-		_buffer->set_data ((Sample *) port_engine.get_buffer (_port_handle, _cycle_nframes) +
-				_global_port_buffer_offset, nframes);
+		addr = (Sample *) port_engine.get_buffer (_port_handle, _cycle_nframes) + _global_port_buffer_offset;
 	} else {
-		_buffer->set_data (&_data[_global_port_buffer_offset], nframes);
+		/* _data was read and resampled as necessary in ::cycle_start */
+		addr = &_data[_global_port_buffer_offset];
 	}
+
+	_buffer->set_data (addr, nframes);
+
 	return *_buffer;
 }
 

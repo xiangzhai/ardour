@@ -149,11 +149,12 @@ class SceneChanger;
 class SessionDirectory;
 class SessionMetadata;
 class SessionPlaylists;
-class Slave;
 class Source;
 class Speakers;
 class TempoMap;
+class TransportMaster;
 class Track;
+class UI_TransportMaster;
 class VCAManager;
 class WindowsVSTPlugin;
 
@@ -363,10 +364,6 @@ public:
 	/* Emitted when all i/o connections are complete */
 
 	PBD::Signal0<void> IOConnectionsComplete;
-
-	/* Timecode status signals */
-	PBD::Signal1<void, bool> MTCSyncStateChanged;
-	PBD::Signal1<void, bool> LTCSyncStateChanged;
 
 	/* Record status signals */
 
@@ -726,10 +723,8 @@ public:
 	static PBD::Signal1<void, samplepos_t> StartTimeChanged;
 	static PBD::Signal1<void, samplepos_t> EndTimeChanged;
 
-	void   request_sync_source (Slave*);
-	bool   synced_to_engine() const { return _slave && config.get_external_sync() && Config->get_sync_source() == Engine; }
-	bool   synced_to_mtc () const { return config.get_external_sync() && Config->get_sync_source() == MTC && g_atomic_int_get (const_cast<gint*>(&_mtc_active)); }
-	bool   synced_to_ltc () const { return config.get_external_sync() && Config->get_sync_source() == LTC && g_atomic_int_get (const_cast<gint*>(&_ltc_active)); }
+	void   request_sync_source (TransportMaster*);
+	bool   synced_to_engine() const { return config.get_external_sync() && Config->get_sync_source() == Engine; }
 
 	double engine_speed() const { return _engine_speed; }
 	double actual_speed() const {
@@ -1111,7 +1106,7 @@ public:
 		PostTransportRoll               = 0x8,
 		PostTransportAbort              = 0x10,
 		PostTransportOverWrite          = 0x20,
-		PostTransportSpeed              = 0x40,
+		/* was ... PostTransportSpeed              = 0x40, */
 		PostTransportAudition           = 0x80,
 		PostTransportReverse            = 0x100,
 		PostTransportInputChange        = 0x200,
@@ -1120,15 +1115,6 @@ public:
 		PostTransportAdjustPlaybackBuffering  = 0x1000,
 		PostTransportAdjustCaptureBuffering   = 0x2000
 	};
-
-	enum SlaveState {
-		Stopped,
-		Waiting,
-		Running
-	};
-
-	SlaveState slave_state() const { return _slave_state; }
-	Slave* slave() const { return _slave; }
 
 	boost::shared_ptr<SessionPlaylists> playlists;
 
@@ -1196,13 +1182,9 @@ public:
 	/* synchronous MIDI ports used for synchronization */
 
 	boost::shared_ptr<MidiPort> midi_clock_output_port () const;
-	boost::shared_ptr<MidiPort> midi_clock_input_port () const;
 	boost::shared_ptr<MidiPort> mtc_output_port () const;
-	boost::shared_ptr<MidiPort> mtc_input_port () const;
-	boost::shared_ptr<Port> ltc_input_port() const;
 	boost::shared_ptr<Port> ltc_output_port() const;
 
-	boost::shared_ptr<IO> ltc_input_io() { return _ltc_input; }
 	boost::shared_ptr<IO> ltc_output_io() { return _ltc_output; }
 
 	MIDI::MachineControl& mmc() { return *_mmc; }
@@ -1219,6 +1201,9 @@ public:
 
 	void auto_connect_thread_wakeup ();
 
+	double compute_speed_from_master (pframes_t nframes);
+	bool   transport_master_is_external() const;
+	boost::shared_ptr<TransportMaster> transport_master() const;
 
 protected:
 	friend class AudioEngine;
@@ -1261,7 +1246,6 @@ private:
 	gint                    _seek_counter;
 	Location*               _session_range_location; ///< session range, or 0 if there is nothing in the session yet
 	bool                    _session_range_end_is_free;
-	Slave*                  _slave;
 	bool                    _silent;
 	samplecnt_t             _remaining_latency_preroll;
 
@@ -1275,7 +1259,6 @@ private:
 	CubicInterpolation       interpolation;
 
 	bool                     auto_play_legal;
-	samplepos_t             _last_slave_transport_sample;
 	samplepos_t             _requested_return_sample;
 	pframes_t                current_block_size;
 	samplecnt_t             _worst_output_latency;
@@ -1325,28 +1308,23 @@ private:
 
 	static const samplecnt_t bounce_chunk_size;
 
-	/* slave tracking */
+	/* Transport master DLL */
 
-	static const int delta_accumulator_size = 25;
-	int delta_accumulator_cnt;
-	int32_t delta_accumulator[delta_accumulator_size];
-	int32_t average_slave_delta;
-	int  average_dir;
-	bool have_first_delta_accumulator;
+	void sync_source_changed (SyncSource, samplepos_t pos, pframes_t cycle_nframes);
+	bool follow_transport_master (pframes_t);
+	bool tracks_can_play (samplepos_t);
 
-	SlaveState _slave_state;
-	gint _mtc_active;
-	gint _ltc_active;
-	samplepos_t slave_wait_end;
+	enum TransportMasterState {
+		Stopped, /* no incoming or invalid signal/data for master to run with */
+		Waiting, /* waiting to get full lock on incoming signal/data */
+		Running  /* lock achieved, master is generating meaningful speed & position */
+	};
+
+	TransportMasterState transport_master_tracking_state;
+	samplepos_t master_wait_end;
 
 	void reset_slave_state ();
-	bool follow_slave (pframes_t);
-	void calculate_moving_average_of_slave_delta (int dir, samplecnt_t this_delta);
-	void track_slave_state (float slave_speed, samplepos_t slave_transport_sample, samplecnt_t this_delta);
-
-	void switch_to_sync_source (SyncSource); /* !RT context */
-	void drop_sync_source ();  /* !RT context */
-	void use_sync_source (Slave*); /* RT context */
+	double follow_master (pframes_t);
 
 	bool post_export_sync;
 	samplepos_t post_export_position;
@@ -2081,7 +2059,6 @@ private:
 
 	MidiClockTicker* midi_clock;
 
-	boost::shared_ptr<IO>   _ltc_input;
 	boost::shared_ptr<IO>   _ltc_output;
 
 	boost::shared_ptr<RTTaskList> _rt_tasklist;

@@ -22,6 +22,8 @@
 
 #include <vector>
 
+#include <boost/atomic.hpp>
+
 #include <glibmm/threads.h>
 
 #include <ltc.h>
@@ -45,24 +47,32 @@ namespace ARDOUR {
 class TempoMap;
 class Session;
 class AudioEngine;
+class Location;
 class MidiPort;
+class AudioPort;
+class Port;
+
 
 /**
- * @class Slave
+ * @class TransportMaster
  *
- * @brief The Slave interface can be used to sync ARDOURs tempo to an external source
- * like MTC, MIDI Clock, etc.
+ * @brief The TransportMaster interface can be used to sync ARDOURs tempo to an external source
+ * like MTC, MIDI Clock, etc. as well as a single internal pseudo master we
+ * call "UI" because it is controlled from any of the user interfaces for
+ * Ardour (GUI, control surfaces, OSC, etc.)
  *
- * The name of the interface may be a bit misleading: A subclass of Slave actually
- * acts as a time master for ARDOUR, that means ARDOUR will try to follow the
- * speed and transport position of the implementation of Slave.
- * Therefore it is rather that class, that makes ARDOUR a slave by connecting it
- * to its external time master.
  */
-class LIBARDOUR_API Slave {
+class LIBARDOUR_API TransportMaster {
   public:
-	Slave() { }
-	virtual ~Slave() {}
+
+	TransportMaster (SyncSource t, std::string const & name);
+	virtual ~TransportMaster();
+
+	static boost::shared_ptr<TransportMaster> factory (SyncSource, std::string const &);
+	static boost::shared_ptr<TransportMaster> factory (XMLNode const &);
+
+	virtual void pre_process (pframes_t nframes) = 0;
+	virtual void post_process (pframes_t nframes) {}
 
 	/**
 	 * This is the most important function to implement:
@@ -83,11 +93,11 @@ class LIBARDOUR_API Slave {
 	 * The method has the following precondition:
 	 * <ul>
 	 *   <li>
-	 *       Slave::ok() should return true, otherwise playback will stop
+	 *       TransportMaster::ok() should return true, otherwise playback will stop
 	 *       immediately and the method will not be called
 	 *   </li>
 	 *   <li>
-	 *     when the references speed and position are passed into the Slave
+	 *     when the references speed and position are passed into the TransportMaster
 	 *     they are uninitialized
 	 *   </li>
 	 * </ul>
@@ -101,15 +111,15 @@ class LIBARDOUR_API Slave {
 	 *    </li>
 	 *    <li>
 	 *      the references speed and position should be assigned
-	 *      to the Slaves current requested transport speed
+	 *      to the TransportMasters current requested transport speed
 	 *      and transport position.
 	 *    </li>
 	 *   <li>
-	 *     Slave::resolution() should be greater than the maximum distance of
+	 *     TransportMaster::resolution() should be greater than the maximum distance of
 	 *     ARDOURs transport position to the slaves requested transport position.
 	 *   </li>
-	 *   <li>Slave::locked() should return true, otherwise Session::no_roll will be called</li>
-	 *   <li>Slave::starting() should be false, otherwise the transport will not move until it becomes true</li>	 *
+	 *   <li>TransportMaster::locked() should return true, otherwise Session::no_roll will be called</li>
+	 *   <li>TransportMaster::starting() should be false, otherwise the transport will not move until it becomes true</li>	 *
 	 * </ul>
 	 *
 	 * @param speed - The transport speed requested
@@ -119,7 +129,7 @@ class LIBARDOUR_API Slave {
 	virtual bool speed_and_position (double& speed, samplepos_t& position) = 0;
 
 	/**
-	 * reports to ARDOUR whether the Slave is currently synced to its external
+	 * reports to ARDOUR whether the TransportMaster is currently synced to its external
 	 * time source.
 	 *
 	 * @return - when returning false, the transport will stop rolling
@@ -143,7 +153,7 @@ class LIBARDOUR_API Slave {
 	virtual bool starting() const { return false; }
 
 	/**
-	 * @return - the timing resolution of the Slave - If the distance of ARDOURs transport
+	 * @return - the timing resolution of the TransportMaster - If the distance of ARDOURs transport
 	 * to the slave becomes greater than the resolution, sound will stop
 	 */
 	virtual samplecnt_t resolution() const = 0;
@@ -165,50 +175,51 @@ class LIBARDOUR_API Slave {
 	 * @return - when returning true, ARDOUR will use transport speed 1.0 no matter what
 	 *           the slave returns
 	 */
-	virtual bool is_always_synced() const { return false; }
-
-	/**
-	 * @return - whether ARDOUR should use the slave speed without any adjustments
-	 */
-	virtual bool give_slave_full_control_over_transport_speed() const { return false; }
+	virtual bool sample_clock_synced() const { return false; }
 
 	/**
 	 * @return - current time-delta between engine and sync-source
 	 */
 	virtual std::string approximate_current_delta() const { return ""; }
 
-};
+	virtual bool can_loop() const { return false; }
 
-/// We need this wrapper for testability, it's just too hard to mock up a session class
-class LIBARDOUR_API ISlaveSessionProxy {
-  public:
-	virtual ~ISlaveSessionProxy() {}
-	virtual TempoMap&  tempo_map()                  const   { return *((TempoMap *) 0); }
-	virtual samplecnt_t sample_rate()                 const   { return 0; }
-	virtual pframes_t  samples_per_cycle()           const   { return 0; }
-	virtual samplepos_t audible_sample ()             const   { return 0; }
-	virtual samplepos_t transport_sample ()           const   { return 0; }
-	virtual pframes_t  samples_since_cycle_start ()  const   { return 0; }
-	virtual samplepos_t sample_time_at_cycle_start() const   { return 0; }
-	virtual samplepos_t sample_time ()                const   { return 0; }
-};
+	virtual Location* loop_location() const { return 0; }
+	bool has_loop() const { return loop_location() != 0; }
 
+	SyncSource type() const { return _type; }
+	std::string name() const { return _name; }
+	void set_name (std::string const &);
 
-/// The Session Proxy for use in real Ardour
-class LIBARDOUR_API SlaveSessionProxy : public ISlaveSessionProxy {
-	Session&    session;
+	int set_state (XMLNode const &, int);
+	XMLNode& get_state();
 
-  public:
-	SlaveSessionProxy(Session &s) : session(s) {}
+	static const std::string state_node_name;
 
-	TempoMap&  tempo_map()                   const;
-	samplecnt_t sample_rate()                  const;
-	pframes_t  samples_per_cycle()            const;
-	samplepos_t audible_sample ()              const;
-	samplepos_t transport_sample ()            const;
-	pframes_t  samples_since_cycle_start ()   const;
-	samplepos_t sample_time_at_cycle_start()  const;
-	samplepos_t sample_time ()                 const;
+	virtual void set_session (Session*);
+
+	boost::shared_ptr<Port> port() const { return _port; }
+
+  protected:
+	SyncSource  _type;
+	std::string _name;
+	Session*    _session;
+	bool        _connected;
+
+	/* DLL - chase incoming data */
+
+	int    transport_direction;
+	int    dll_initstate;
+
+	double t0; ///< time at the beginning of the MTC quater sample
+	double t1; ///< calculated end of the MTC quater sample
+	double e2; ///< second order loop error
+	double b, c; ///< DLL filter coefficients
+
+	boost::shared_ptr<Port>  _port;
+
+	PBD::ScopedConnection port_connection;
+	bool connection_handler (boost::weak_ptr<ARDOUR::Port>, std::string name1, boost::weak_ptr<ARDOUR::Port>, std::string name2, bool yn);
 };
 
 struct LIBARDOUR_API SafeTime {
@@ -227,9 +238,26 @@ struct LIBARDOUR_API SafeTime {
 	}
 };
 
-class LIBARDOUR_API TimecodeSlave : public Slave {
+/** a helper class for any TransportMaster that receives its input via a MIDI
+ * port
+ */
+class LIBARDOUR_API TransportMasterViaMIDI {
   public:
-	TimecodeSlave () {}
+	boost::shared_ptr<MidiPort> midi_port() const { return _midi_port; }
+	boost::shared_ptr<Port> create_midi_port (std::string const & port_name);
+
+  protected:
+	TransportMasterViaMIDI () {};
+
+	MIDI::Parser                 parser;
+	boost::shared_ptr<MidiPort> _midi_port;
+
+	void update_from_midi (pframes_t nframes);
+};
+
+class LIBARDOUR_API TimecodeTransportMaster : public TransportMaster {
+  public:
+	TimecodeTransportMaster (std::string const & name, SyncSource type) : TransportMaster (type, name) {}
 
 	virtual Timecode::TimecodeFormat apparent_timecode_format() const = 0;
 
@@ -246,12 +274,15 @@ class LIBARDOUR_API TimecodeSlave : public Slave {
 	PBD::Signal1<void, bool> ActiveChanged;
 };
 
-class LIBARDOUR_API MTC_Slave : public TimecodeSlave {
+class LIBARDOUR_API MTC_TransportMaster : public TimecodeTransportMaster, public TransportMasterViaMIDI {
   public:
-	MTC_Slave (Session&, MidiPort&);
-	~MTC_Slave ();
+	MTC_TransportMaster (std::string const &);
+	~MTC_TransportMaster ();
 
-	void rebind (MidiPort&);
+	void set_session (Session*);
+
+	void pre_process (pframes_t nframes);
+
 	bool speed_and_position (double&, samplepos_t&);
 
 	bool locked() const;
@@ -261,15 +292,12 @@ class LIBARDOUR_API MTC_Slave : public TimecodeSlave {
 	samplecnt_t resolution () const;
 	bool requires_seekahead () const { return false; }
 	samplecnt_t seekahead_distance() const;
-	bool give_slave_full_control_over_transport_speed() const;
 
         Timecode::TimecodeFormat apparent_timecode_format() const;
         std::string approximate_current_position() const;
 	std::string approximate_current_delta() const;
 
   private:
-	Session&    session;
-	MidiPort*   port;
 	PBD::ScopedConnectionList port_connections;
 	PBD::ScopedConnection     config_connection;
 	bool        can_notify_on_unknown_rate;
@@ -277,13 +305,13 @@ class LIBARDOUR_API MTC_Slave : public TimecodeSlave {
 	static const int sample_tolerance;
 
 	SafeTime       current;
-	samplepos_t     mtc_frame;               /* current time */
+	samplepos_t    mtc_frame;               /* current time */
 	double         mtc_frame_dll;
-	samplepos_t     last_inbound_frame;      /* when we got it; audio clocked */
+	samplepos_t    last_inbound_frame;      /* when we got it; audio clocked */
 	MIDI::byte     last_mtc_fps_byte;
-	samplepos_t     window_begin;
-	samplepos_t     window_end;
-	samplepos_t     first_mtc_timestamp;
+	samplepos_t    window_begin;
+	samplepos_t    window_end;
+	samplepos_t    first_mtc_timestamp;
 	bool           did_reset_tc_format;
 	Timecode::TimecodeFormat saved_tc_format;
 	Glib::Threads::Mutex    reset_lock;
@@ -301,19 +329,6 @@ class LIBARDOUR_API MTC_Slave : public TimecodeSlave {
 	bool           printed_timecode_warning;
 	sampleoffset_t  current_delta;
 
-	/* DLL - chase MTC */
-	double t0; ///< time at the beginning of the MTC quater sample
-	double t1; ///< calculated end of the MTC quater sample
-	double e2; ///< second order loop error
-	double b, c, omega; ///< DLL filter coefficients
-
-	/* DLL - sync engine */
-	int    engine_dll_initstate;
-	double te0; ///< time at the beginning of the engine process
-	double te1; ///< calculated sync time
-	double ee2; ///< second order loop error
-	double be, ce, oe; ///< DLL filter coefficients
-
 	void reset (bool with_pos);
 	void queue_reset (bool with_pos);
 	void maybe_reset ();
@@ -325,16 +340,18 @@ class LIBARDOUR_API MTC_Slave : public TimecodeSlave {
 	void reset_window (samplepos_t);
 	bool outside_window (samplepos_t) const;
 	void init_mtc_dll(samplepos_t, double);
-	void init_engine_dll (samplepos_t, samplepos_t);
 	void parse_timecode_offset();
 	void parameter_changed(std::string const & p);
 };
 
-class LIBARDOUR_API LTC_Slave : public TimecodeSlave {
+class LIBARDOUR_API LTC_TransportMaster : public TimecodeTransportMaster {
 public:
-	LTC_Slave (Session&);
-	~LTC_Slave ();
+	LTC_TransportMaster (std::string const &);
+	~LTC_TransportMaster ();
 
+	void set_session (Session*);
+
+	void pre_process (pframes_t nframes);
 	bool speed_and_position (double&, samplepos_t&);
 
 	bool locked() const;
@@ -343,7 +360,6 @@ public:
 	samplecnt_t resolution () const;
 	bool requires_seekahead () const { return false; }
 	samplecnt_t seekahead_distance () const { return 0; }
-	bool give_slave_full_control_over_transport_speed() const { return true; }
 
 	Timecode::TimecodeFormat apparent_timecode_format() const;
 	std::string approximate_current_position() const;
@@ -362,9 +378,9 @@ public:
 	void parse_timecode_offset();
 	void parameter_changed(std::string const & p);
 
-	Session&       session;
 	bool           did_reset_tc_format;
 	Timecode::TimecodeFormat saved_tc_format;
+	boost::shared_ptr<AudioPort> ltcport;
 
 	LTCDecoder *   decoder;
 	double         samples_per_ltc_frame;
@@ -389,23 +405,18 @@ public:
 	PBD::ScopedConnectionList port_connections;
 	PBD::ScopedConnection     config_connection;
         LatencyRange  ltc_slave_latency;
-
-	/* DLL - chase LTC */
-	int    transport_direction;
-	int    engine_dll_initstate;
-	double t0; ///< time at the beginning of the MTC quater sample
-	double t1; ///< calculated end of the MTC quater sample
-	double e2; ///< second order loop error
-	double b, c; ///< DLL filter coefficients
 };
 
-class LIBARDOUR_API MIDIClock_Slave : public Slave {
+class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public TransportMasterViaMIDI {
   public:
-	MIDIClock_Slave (Session&, MidiPort&, int ppqn = 24);
+	MIDIClock_TransportMaster (std::string const & name, int ppqn = 24);
 
 	/// Constructor for unit tests
-	MIDIClock_Slave (ISlaveSessionProxy* session_proxy = 0, int ppqn = 24);
-	~MIDIClock_Slave ();
+	~MIDIClock_TransportMaster ();
+
+	void set_session (Session*);
+
+	void pre_process (pframes_t nframes);
 
 	void rebind (MidiPort&);
 	bool speed_and_position (double&, samplepos_t&);
@@ -416,13 +427,10 @@ class LIBARDOUR_API MIDIClock_Slave : public Slave {
 
 	samplecnt_t resolution () const;
 	bool requires_seekahead () const { return false; }
-	bool give_slave_full_control_over_transport_speed() const { return true; }
 
-	void set_bandwidth (double a_bandwith) { bandwidth = a_bandwith; }
 	std::string approximate_current_delta() const;
 
   protected:
-	ISlaveSessionProxy* session;
 	PBD::ScopedConnectionList port_connections;
 
 	/// pulses per quarter note for one MIDI clock sample (default 24)
@@ -442,27 +450,11 @@ class LIBARDOUR_API MIDIClock_Slave : public Slave {
 	/// since start
 	long midi_clock_count;
 
-	//the delay locked loop (DLL), see www.kokkinizita.net/papers/usingdll.pdf
-
-	/// time at the beginning of the MIDI clock sample
-	double t0;
-
-	/// calculated end of the MIDI clock sample
-	double t1;
-
-	/// loop error = real value - expected value
-	double e;
-
-	/// second order loop error
-	double e2;
-
-	/// DLL filter bandwidth
-	double bandwidth;
-
-	/// DLL filter coefficients
-	double b, c, omega;
+	/// a DLL to track MIDI clock
 
 	sampleoffset_t  current_delta;
+	double _speed;
+	bool _running;
 
 	void reset ();
 	void start (MIDI::Parser& parser, samplepos_t timestamp);
@@ -475,22 +467,15 @@ class LIBARDOUR_API MIDIClock_Slave : public Slave {
 	void calculate_filter_coefficients();
 	void update_midi_clock (MIDI::Parser& parser, samplepos_t timestamp);
 	void read_current (SafeTime *) const;
-	bool stop_if_no_more_clock_events(samplepos_t& pos, samplepos_t now);
-
-	/// whether transport should be rolling
-	bool _started;
-
-	/// is true if the MIDI Start message has just been received until
-	/// the first MIDI Clock Event
-	bool _starting;
 };
 
-class LIBARDOUR_API Engine_Slave : public Slave
+class LIBARDOUR_API Engine_TransportMaster : public TransportMaster
 {
   public:
-	Engine_Slave (AudioEngine&);
-	~Engine_Slave ();
+	Engine_TransportMaster (AudioEngine&);
+	~Engine_TransportMaster  ();
 
+	void pre_process (pframes_t);
 	bool speed_and_position (double& speed, samplepos_t& pos);
 
 	bool starting() const { return _starting; }
@@ -498,11 +483,57 @@ class LIBARDOUR_API Engine_Slave : public Slave
 	bool ok() const;
 	samplecnt_t resolution () const { return 1; }
 	bool requires_seekahead () const { return false; }
-	bool is_always_synced() const { return true; }
+	bool sample_clock_synced() const { return true; }
 
   private:
         AudioEngine& engine;
-	bool _starting;
+        bool _starting;
+};
+
+class LIBARDOUR_API UI_TransportMaster : public TransportMaster
+{
+  public:
+	UI_TransportMaster ();
+
+	void pre_process (pframes_t);
+	void post_process (pframes_t);
+
+	void set_speed (double);
+	void set_position (samplepos_t);
+
+	double speed() const;
+	samplepos_t position() const;
+
+	bool        speed_and_position (double& speed, samplepos_t& position);
+	bool        locked() const { return true; }
+	bool        ok() const { return true; }
+	bool        starting() const { return false; }
+	samplecnt_t resolution() const { return 1; }
+	bool        requires_seekahead () const { return false; }
+	samplecnt_t seekahead_distance() const { return 0; }
+	bool        sample_clock_synced() const { return false; }
+	bool        can_loop() const { return true; }
+	Location* loop_location() const;
+
+	/* Only the Session should ever call these. The UI transport master
+	 * does not advance by itself (how could it?) so the Session is
+	 * responsible for moving it at the end of process()
+	 */
+
+	void session_update_position (samplepos_t);
+	void session_start_process ();
+	void session_end_process ();
+
+	void set_loop_location (Location* loc);
+
+  private:
+	Glib::Threads::RWLock speed_pos_lock;
+	double      _speed;
+	boost::atomic<samplepos_t> _position;
+	samplepos_t _session_owns_this;
+	double      _requested_speed;
+	samplepos_t _requested_position;
+	Location*   _loop_location;
 };
 
 } /* namespace */

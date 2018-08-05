@@ -549,7 +549,7 @@ namespace ARDOUR {
 	};
 
 	enum SyncSource {
-		/* These are "synonyms". It is important for JACK to be first
+		/* The first two are "synonyms". It is important for JACK to be first
 		   both here and in enums.cc, so that the string "JACK" is
 		   correctly recognized in older session and preference files.
 		*/
@@ -557,7 +557,8 @@ namespace ARDOUR {
 		Engine = 0,
 		MTC,
 		MIDIClock,
-		LTC
+		LTC,
+		UI,
 	};
 
 	enum ShuttleBehaviour {

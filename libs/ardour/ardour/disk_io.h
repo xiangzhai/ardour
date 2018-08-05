@@ -80,9 +80,6 @@ class LIBARDOUR_API DiskIOProcessor : public Processor
 
 	virtual void non_realtime_locate (samplepos_t);
 
-	void non_realtime_speed_change ();
-	bool realtime_speed_change ();
-
 	virtual void punch_in()  {}
 	virtual void punch_out() {}
 
@@ -117,7 +114,6 @@ class LIBARDOUR_API DiskIOProcessor : public Processor
 	uint32_t      i_am_the_modifier;
 	double       _actual_speed;
 	double       _target_speed;
-	bool         _seek_required;
 	bool         _slaved;
 	bool          in_set_state;
 	samplepos_t   playback_sample;

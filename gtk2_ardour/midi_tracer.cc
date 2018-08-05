@@ -121,7 +121,6 @@ MidiTracer::MidiTracer ()
 	port_changed ();
 }
 
-
 MidiTracer::~MidiTracer()
 {
 }
@@ -178,8 +177,8 @@ MidiTracer::port_changed ()
 		boost::shared_ptr<ARDOUR::MidiPort> mp = boost::dynamic_pointer_cast<ARDOUR::MidiPort> (p);
 
 		if (mp) {
-			mp->self_parser().any.connect_same_thread (_parser_connection, boost::bind (&MidiTracer::tracer, this, _1, _2, _3));
-			mp->set_trace_on (true);
+			my_parser.any.connect_same_thread (_parser_connection, boost::bind (&MidiTracer::tracer, this, _1, _2, _3));
+			mp->set_trace (&my_parser);
 			traced_port = mp;
 		}
 
@@ -194,7 +193,7 @@ MidiTracer::disconnect ()
 	_parser_connection.disconnect ();
 
 	if (traced_port) {
-		traced_port->set_trace_on (false);
+		traced_port->set_trace (0);
 		traced_port.reset ();
 	}
 }

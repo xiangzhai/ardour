@@ -91,6 +91,7 @@ private:
 	void disconnect ();
 	PBD::ScopedConnection _parser_connection;
 	PBD::ScopedConnection _manager_connection;
+	MIDI::Parser my_parser;
 
 	boost::shared_ptr<ARDOUR::MidiPort> traced_port;
 };

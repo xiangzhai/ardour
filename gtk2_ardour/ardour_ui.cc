@@ -105,7 +105,8 @@
 #include "ardour/session_state_utils.h"
 #include "ardour/session_utils.h"
 #include "ardour/source_factory.h"
-#include "ardour/slave.h"
+#include "ardour/transport_master.h"
+#include "ardour/transport_master_manager.h"
 #include "ardour/system_exec.h"
 #include "ardour/track.h"
 #include "ardour/vca_manager.h"
@@ -1801,11 +1802,11 @@ ARDOUR_UI::update_timecode_format ()
 
 	if (_session) {
 		bool matching;
-		TimecodeSlave* tcslave;
-		SyncSource sync_src = Config->get_sync_source();
+		boost::shared_ptr<TimecodeTransportMaster> tcmaster;
+		boost::shared_ptr<TransportMaster> tm = TransportMasterManager::instance().current();
 
-		if ((sync_src == LTC || sync_src == MTC) && (tcslave = dynamic_cast<TimecodeSlave*>(_session->slave())) != 0) {
-			matching = (tcslave->apparent_timecode_format() == _session->config.get_timecode_format());
+		if ((tm->type() == LTC || tm->type() == MTC) && (tcmaster = boost::dynamic_pointer_cast<TimecodeTransportMaster>(tm)) != 0) {
+			matching = (tcmaster->apparent_timecode_format() == _session->config.get_timecode_format());
 		} else {
 			matching = true;
 		}

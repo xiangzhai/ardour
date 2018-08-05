@@ -113,6 +113,7 @@
 #include "ardour/runtime_functions.h"
 #include "ardour/session_event.h"
 #include "ardour/source_factory.h"
+#include "ardour/transport_master_manager.h"
 #ifdef LV2_SUPPORT
 #include "ardour/uri_map.h"
 #endif
@@ -592,8 +593,13 @@ void
 ARDOUR::init_post_engine ()
 {
 	XMLNode* node;
+
 	if ((node = Config->control_protocol_state()) != 0) {
 		ControlProtocolManager::instance().set_state (*node, Stateful::loading_state_version);
+	}
+
+	if ((node = Config->transport_master_state()) != 0) {
+		TransportMasterManager::instance().set_state (*node, Stateful::loading_state_version);
 	}
 
 	/* find plugins */

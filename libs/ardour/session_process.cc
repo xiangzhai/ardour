@@ -38,7 +38,8 @@
 #include "ardour/process_thread.h"
 #include "ardour/scene_changer.h"
 #include "ardour/session.h"
-#include "ardour/slave.h"
+#include "ardour/transport_master.h"
+#include "ardour/transport_master_manager.h"
 #include "ardour/ticker.h"
 #include "ardour/types.h"
 #include "ardour/vca.h"
@@ -448,8 +449,8 @@ Session::process_with_events (pframes_t nframes)
 			return;
 		}
 
-		if (!_exporting && _slave) {
-			if (!follow_slave (nframes)) {
+		if (!_exporting) {
+			if (!follow_transport_master (nframes)) {
 				return;
 			}
 		}
@@ -555,22 +556,10 @@ Session::process_with_events (pframes_t nframes)
 	}
 }
 
-void
-Session::reset_slave_state ()
-{
-	average_slave_delta = 1800;
-	delta_accumulator_cnt = 0;
-	have_first_delta_accumulator = false;
-	_slave_state = Stopped;
-	DiskReader::set_no_disk_output (false);
-}
-
 bool
 Session::transport_locked () const
 {
-	Slave* sl = _slave;
-
-	if (!locate_pending() && (!config.get_external_sync() || (sl && sl->ok() && sl->locked()))) {
+	if (!locate_pending() && (!config.get_external_sync() || (transport_master()->ok() && transport_master()->locked()))) {
 		return true;
 	}
 
@@ -578,265 +567,99 @@ Session::transport_locked () const
 }
 
 bool
-Session::follow_slave (pframes_t nframes)
+Session::follow_transport_master (pframes_t nframes)
 {
-	double slave_speed;
-	samplepos_t slave_transport_sample;
-	samplecnt_t this_delta;
-	int dir;
+	/* We have the following goals here:
 
-	if (!_slave->ok()) {
+	    - check transport master state, and use no_roll() if the master is in a state that cannot be used.
+	    - notice if the master changed direction, and respond appropriately if it has
+	    - decide whether or not to silence disk output if we're not close enough to the transport master position
+
+	  If we return true, normally processing will continue. If we return false, the calling process function will
+	  return prematurely. We must therefore ensure we have done all necessary things before returning false.
+	*/
+
+	TransportMasterManager& tmm (TransportMasterManager::instance());
+	boost::shared_ptr<TransportMaster> master = tmm.current();
+
+	if (!master->ok()) {
 		stop_transport ();
-		config.set_external_sync (false);
-		goto noroll;
+		DEBUG_TRACE (DEBUG::Slave, "no roll2\n");
+		no_roll (nframes);
+		return false;
 	}
 
-	_slave->speed_and_position (slave_speed, slave_transport_sample);
+	const double master_speed = tmm.get_current_speed_in_process_context();
+	const samplepos_t master_position = tmm.get_current_position_in_process_context();
+	const double delta = master_position - _transport_sample;
 
-	DEBUG_TRACE (DEBUG::Slave, string_compose ("Slave position %1 speed %2\n", slave_transport_sample, slave_speed));
+	DEBUG_TRACE (DEBUG::Slave, string_compose ("Slave position %1 speed %2\n", master_position, master_speed));
 
-	if (!_slave->locked()) {
-		DEBUG_TRACE (DEBUG::Slave, "slave not locked\n");
-		goto noroll;
+	if (!master->locked()) {
+		DEBUG_TRACE (DEBUG::Slave, "no roll2\n");
+		no_roll (nframes);
+		return false;
 	}
 
-	if (slave_transport_sample > _transport_sample) {
-		this_delta = slave_transport_sample - _transport_sample;
-		dir = 1;
-	} else {
-		this_delta = _transport_sample - slave_transport_sample;
-		dir = -1;
-	}
+	if (master_speed != 0.0f) {
 
-	if (_slave->starting()) {
-		slave_speed = 0.0f;
-	}
+		/* transport master is moving */
 
-	if (_slave->is_always_synced() ||
-			(Config->get_timecode_source_is_synced() && (dynamic_cast<TimecodeSlave*>(_slave)) != 0)
-			) {
+		switch (transport_master_tracking_state) {
+		case Stopped:
 
-		/* if the TC source is synced, then we assume that its
-		   speed is binary: 0.0 or 1.0
-		*/
-
-		if (slave_speed != 0.0f) {
-			slave_speed = 1.0f;
-		}
-
-	} else {
-
-		/* if we are chasing and the average delta between us and the
-		   master gets too big, we want to switch to silent
-		   motion. so keep track of that here.
-		*/
-
-		if (_slave_state == Running) {
-			calculate_moving_average_of_slave_delta(dir, abs(this_delta));
-		}
-	}
-
-	track_slave_state (slave_speed, slave_transport_sample, this_delta);
-
-	DEBUG_TRACE (DEBUG::Slave, string_compose ("slave state %1 @ %2 speed %3 cur delta %4 avg delta %5\n",
-						   _slave_state, slave_transport_sample, slave_speed, this_delta, average_slave_delta));
-
-
-	if (_slave_state == Running && !_slave->is_always_synced() && !(Config->get_timecode_source_is_synced() && (dynamic_cast<TimecodeSlave*>(_slave)) != 0)) {
-
-		/* may need to varispeed to sync with slave */
-
-		if (_transport_speed != 0.0f) {
-
-			/*
-			   note that average_dir is +1 or -1
+			/* it was stopped, and has now restarted. get its position, check if we can already play audio for the right spot,
+			   and locate if needed.
 			*/
 
-			float delta;
-
-			if (average_slave_delta == 0) {
-				delta = this_delta;
-				delta *= dir;
-			} else {
-				delta = average_slave_delta;
-				delta *= average_dir;
-			}
-
-#ifndef NDEBUG
-			if (slave_speed != 0.0) {
-				DEBUG_TRACE (DEBUG::Slave, string_compose ("delta = %1 speed = %2 ts = %3 M@%4 S@%5 avgdelta %6\n",
-									   (int) (dir * this_delta),
-									   slave_speed,
-									   _transport_speed,
-									   _transport_sample,
-									   slave_transport_sample,
-									   average_slave_delta));
-			}
-#endif
-
-			if (_slave->give_slave_full_control_over_transport_speed()) {
-				set_transport_speed (slave_speed, 0, false, false);
-				//std::cout << "set speed = " << slave_speed << "\n";
-			} else {
-				float adjusted_speed = slave_speed + (1.5 * (delta /  float(_current_sample_rate)));
-				request_transport_speed (adjusted_speed);
-				DEBUG_TRACE (DEBUG::Slave, string_compose ("adjust using %1 towards %2 ratio %3 current %4 slave @ %5\n",
-									   delta, adjusted_speed, adjusted_speed/slave_speed, _transport_speed,
-									   slave_speed));
-			}
-
-			if (!actively_recording() && (samplecnt_t) average_slave_delta > _slave->resolution()) {
-				DEBUG_TRACE (DEBUG::Slave, string_compose ("average slave delta %1 greater than slave resolution %2 => no disk output\n", average_slave_delta, _slave->resolution()));
-				/* run routes as normal, but no disk output */
-				DiskReader::set_no_disk_output (true);
-				return true;
-			}
-
-			if (!have_first_delta_accumulator) {
-				DEBUG_TRACE (DEBUG::Slave, "waiting for first slave delta accumulator to be ready, no disk output\n");
-				/* run routes as normal, but no disk output */
-				DiskReader::set_no_disk_output (true);
-				return true;
-			}
-		}
-	}
-
-
-	if (!have_first_delta_accumulator) {
-		DEBUG_TRACE (DEBUG::Slave, "still waiting to compute slave delta, no disk output\n");
-		DiskReader::set_no_disk_output (true);
-	} else {
-		DiskReader::set_no_disk_output (false);
-	}
-
-	if ((_slave_state == Running) && (0 == (post_transport_work () & ~PostTransportSpeed))) {
-		/* speed is set, we're locked, and good to go */
-		return true;
-	}
-
-  noroll:
-	/* don't move at all */
-	DEBUG_TRACE (DEBUG::Slave, "no roll\n")
-	no_roll (nframes);
-	return false;
-}
-
-void
-Session::calculate_moving_average_of_slave_delta (int dir, samplecnt_t this_delta)
-{
-	if (delta_accumulator_cnt >= delta_accumulator_size) {
-		have_first_delta_accumulator = true;
-		delta_accumulator_cnt = 0;
-	}
-
-	if (delta_accumulator_cnt != 0 || this_delta < _current_sample_rate) {
-		delta_accumulator[delta_accumulator_cnt++] = (samplecnt_t) dir *  (samplecnt_t) this_delta;
-	}
-
-	if (have_first_delta_accumulator) {
-		average_slave_delta = 0L;
-		for (int i = 0; i < delta_accumulator_size; ++i) {
-			average_slave_delta += delta_accumulator[i];
-		}
-		average_slave_delta /= (int32_t) delta_accumulator_size;
-		if (average_slave_delta < 0L) {
-			average_dir = -1;
-			average_slave_delta = average_slave_delta;
-		} else {
-			average_dir = 1;
-		}
-	}
-}
-
-void
-Session::track_slave_state (float slave_speed, samplepos_t slave_transport_sample, samplecnt_t /*this_delta*/)
-{
-	if (slave_speed != 0.0f) {
-
-		/* slave is running */
-
-		switch (_slave_state) {
-		case Stopped:
-			if (_slave->requires_seekahead()) {
-				slave_wait_end = slave_transport_sample + _slave->seekahead_distance ();
-				DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stopped, but running, requires seekahead to %1\n", slave_wait_end));
-				/* we can call locate() here because we are in process context */
-				locate (slave_wait_end, false, false);
-				_slave_state = Waiting;
-
-			} else {
-
-				DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stopped -> running at %1\n", slave_transport_sample));
-
-				memset (delta_accumulator, 0, sizeof (int32_t) * delta_accumulator_size);
-				average_slave_delta = 0L;
-
-				Location* al = _locations->auto_loop_location();
-
-				if (al && play_loop && (slave_transport_sample < al->start() || slave_transport_sample > al->end())) {
-					// cancel looping
-					request_play_loop(false);
+			if (master->requires_seekahead()) {
+				master_wait_end = master_position + master->seekahead_distance ();
+				if (!tracks_can_play (master_wait_end)) {
+					locate (master_wait_end, false, false);
+					transport_master_tracking_state = Waiting;
+				} else {
+					transport_master_tracking_state = Running;
 				}
 
-				if (slave_transport_sample != _transport_sample) {
-					DEBUG_TRACE (DEBUG::Slave, string_compose ("require locate to run. eng: %1 -> sl: %2\n", _transport_sample, slave_transport_sample));
-					locate (slave_transport_sample, false, false);
+			} else {
+
+				if (!tracks_can_play (master_position)) {
+					locate (master_position, false, false);
+				} else {
+					_transport_sample = master_position;
+					transport_master_tracking_state = Running;
 				}
-				_slave_state = Running;
 			}
 			break;
 
 		case Waiting:
-		default:
-			break;
-		}
+			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave waiting at %1\n", master_position));
 
-		if (_slave_state == Waiting) {
+			if (master_position >= master_wait_end) {
 
-			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave waiting at %1\n", slave_transport_sample));
+				DEBUG_TRACE (DEBUG::Slave, string_compose ("slave start at %1 vs %2\n", master_position, _transport_sample));
 
-			if (slave_transport_sample >= slave_wait_end) {
-
-				DEBUG_TRACE (DEBUG::Slave, string_compose ("slave start at %1 vs %2\n", slave_transport_sample, _transport_sample));
-
-				_slave_state = Running;
-
-				/* now perform a "micro-seek" within the disk buffers to realign ourselves
-				   precisely with the master.
-				*/
-
-
-				bool ok = true;
-				samplecnt_t sample_delta = slave_transport_sample - _transport_sample;
-
-				boost::shared_ptr<RouteList> rl = routes.reader();
-				for (RouteList::iterator i = rl->begin(); i != rl->end(); ++i) {
-					boost::shared_ptr<Track> tr = boost::dynamic_pointer_cast<Track> (*i);
-					if (tr && !tr->can_internal_playback_seek (sample_delta)) {
-						ok = false;
-						break;
-					}
-				}
-
-				if (ok) {
-					for (RouteList::iterator i = rl->begin(); i != rl->end(); ++i) {
-						boost::shared_ptr<Track> tr = boost::dynamic_pointer_cast<Track> (*i);
-						if (tr) {
-							tr->internal_playback_seek (sample_delta);
-						}
-					}
-					_transport_sample += sample_delta;
-
-				} else {
-					cerr << "cannot micro-seek\n";
-					/* XXX what? */
-				}
+				assert (tracks_can_play (master_position));
+				_transport_sample = master_position;
+				transport_master_tracking_state = Running;
 			}
-		}
+			break;
 
-		if (_slave_state == Running && _transport_speed == 0.0f) {
-			DEBUG_TRACE (DEBUG::Slave, "slave starts transport\n");
-			start_transport ();
+#if __cplusplus > 199711L
+#define local_signbit(x) std::signbit (x)
+#else
+#define local_signbit(x) ((((__int64*)(&z))*) & 0x8000000000000000)
+#endif
+
+		case Running:
+			if (_transport_speed == 0.0f) {
+				DEBUG_TRACE (DEBUG::Slave, "slave starts transport\n");
+				start_transport ();
+			} else if (local_signbit (master_speed) != local_signbit (_last_transport_speed)) {
+				/* master changed direction, so reset speed */
+				set_transport_speed (master_speed > 0.0 ? 1.0 : -1.0 , _transport_sample, false, false, false);
+			}
+			break;
 		}
 
 	} else { // slave_speed is 0
@@ -844,17 +667,27 @@ Session::track_slave_state (float slave_speed, samplepos_t slave_transport_sampl
 		/* slave has stopped */
 
 		if (_transport_speed != 0.0f) {
-			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stops transport: %1 sample %2 tf %3\n", slave_speed, slave_transport_sample, _transport_sample));
+			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stops transport: %1 sample %2 tf %3\n", master_speed, master_position, _transport_sample));
 			stop_transport ();
 		}
 
-		if (slave_transport_sample != _transport_sample) {
-			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stopped, move to %1\n", slave_transport_sample));
-			force_locate (slave_transport_sample, false);
+		if (master_position != _transport_sample) {
+			if (!tracks_can_play (master_position)) {
+				DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stopped, move to %1\n", master_position));
+				force_locate (master_position, false);
+			}
 		}
 
-		reset_slave_state();
+		transport_master_tracking_state = Stopped;
 	}
+
+	if (!actively_recording() && delta > master->resolution()) {
+		DEBUG_TRACE (DEBUG::Slave, string_compose ("slave delta %1 greater than slave resolution %2 => no disk output\n", delta, master->resolution()));
+		/* run routes as normal, but no disk output */
+		DiskReader::set_no_disk_output (true);
+	}
+
+	return true;
 }
 
 void
@@ -868,23 +701,20 @@ Session::process_without_events (pframes_t nframes)
 		return;
 	}
 
-	if (!_exporting && _slave) {
-		if (!follow_slave (nframes)) {
+	if (!_exporting) {
+		if (!follow_transport_master (nframes)) {
 			ltc_tx_send_time_code_for_cycle (_transport_sample, _transport_sample, 0, 0 , nframes);
 			return;
 		}
 	}
 
+	assert (_transport_speed == 0 || _transport_speed == 1.0 || _transport_speed == -1.0);
+
 	if (_transport_speed == 0) {
 		no_roll (nframes);
 		return;
-	}
-
-	if (_transport_speed == 1.0) {
-		samples_moved = (samplecnt_t) nframes;
 	} else {
-		interpolation.set_speed (_transport_speed);
-		samples_moved = interpolation.distance (nframes);
+		samples_moved = (samplecnt_t) nframes;
 	}
 
 	if (!_exporting && !timecode_transmission_suspended()) {
@@ -1201,11 +1031,6 @@ Session::process_event (SessionEvent* ev)
 		overwrite_some_buffers (static_cast<Track*>(ev->ptr));
 		break;
 
-	case SessionEvent::SetSyncSource:
-		DEBUG_TRACE (DEBUG::Slave, "seen request for new slave\n");
-		use_sync_source (ev->slave);
-		break;
-
 	case SessionEvent::Audition:
 		set_audition (ev->region);
 		// drop reference to region
@@ -1259,7 +1084,7 @@ Session::compute_stop_limit () const
 		return max_samplepos;
 	}
 
-	if (_slave) {
+	if (TransportMasterManager::instance().current()->type() != UI) {
 		return max_samplepos;
 	}
 

@@ -20,15 +20,19 @@
 #include <iostream>
 #include <cerrno>
 
+#include "pbd/i18n.h"
+
 #include "ardour/audioengine.h"
 #include "ardour/audio_backend.h"
-#include "ardour/slave.h"
+#include "ardour/transport_master.h"
 
 using namespace std;
 using namespace ARDOUR;
 
-Engine_Slave::Engine_Slave (AudioEngine& e)
-	: engine (e)
+Engine_TransportMaster::Engine_TransportMaster (AudioEngine& e)
+	: TransportMaster (Engine, X_("JACK"))
+	, engine (e)
+	, _starting (false)
 {
 	double x;
 	samplepos_t p;
@@ -36,32 +40,36 @@ Engine_Slave::Engine_Slave (AudioEngine& e)
 	speed_and_position (x, p);
 }
 
-Engine_Slave::~Engine_Slave ()
+Engine_TransportMaster::~Engine_TransportMaster ()
 {
 }
 
 bool
-Engine_Slave::locked() const
-{
-	return true;
-}
-
-bool
-Engine_Slave::ok() const
+Engine_TransportMaster::locked() const
 {
 	return true;
 }
 
 bool
-Engine_Slave::speed_and_position (double& sp, samplepos_t& position)
+Engine_TransportMaster::ok() const
+{
+	return true;
+}
+
+void
+Engine_TransportMaster::pre_process (pframes_t)
+{
+	/* nothing to do */
+}
+
+bool
+Engine_TransportMaster::speed_and_position (double& sp, samplepos_t& position)
 {
 	boost::shared_ptr<AudioBackend> backend = engine.current_backend();
 
-	if (backend) {
-		_starting = backend->speed_and_position (sp, position);
-	} else {
-		_starting = false;
+	if (backend && backend->speed_and_position (sp, position)) {
+		return true;
 	}
 
-	return true;
+	return false;
 }

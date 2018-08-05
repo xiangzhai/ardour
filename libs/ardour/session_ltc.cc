@@ -25,7 +25,7 @@
 #include "ardour/debug.h"
 #include "ardour/io.h"
 #include "ardour/session.h"
-#include "ardour/slave.h"
+#include "ardour/transport_master.h"
 
 #include "pbd/i18n.h"
 
@@ -470,8 +470,8 @@ Session::ltc_tx_send_time_code_for_cycle (samplepos_t start_sample, samplepos_t 
 	 */
 	double maxdiff;
 
-	if (config.get_external_sync() && slave()) {
-		maxdiff = slave()->resolution();
+	if (transport_master_is_external()) {
+		maxdiff = transport_master()->resolution();
 	} else {
 		maxdiff = ceil(fabs(ltc_speed))*2.0;
 		if (nominal_sample_rate() != sample_rate()) {
@@ -572,7 +572,7 @@ Session::ltc_tx_send_time_code_for_cycle (samplepos_t start_sample, samplepos_t 
 		/* reduce (low freq) jitter.
 		 * The granularity of the LTC encoder speed is 1 byte =
 		 * (samples-per-timecode-sample / 10) audio-samples.
-		 * Thus, tiny speed changes [as produced by some slaves]
+		 * Thus, tiny speed changes [as produced by some transport masters]
 		 * may not have any effect in the cycle when they occur,
 		 * but they will add up over time.
 		 *
