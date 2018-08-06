@@ -128,9 +128,7 @@ MidiPortManager::get_midi_port_states () const
 	PortMap ports;
 	list<XMLNode*> s;
 
-	ports.insert (make_pair (_mtc_input_port->name(), _mtc_input_port));
 	ports.insert (make_pair (_mtc_output_port->name(), _mtc_output_port));
-	ports.insert (make_pair (_midi_clock_input_port->name(), _midi_clock_input_port));
 	ports.insert (make_pair (_midi_clock_output_port->name(), _midi_clock_output_port));
 	ports.insert (make_pair (_midi_in->name(), _midi_in));
 	ports.insert (make_pair (_midi_out->name(), _midi_out));

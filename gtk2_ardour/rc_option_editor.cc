@@ -3221,7 +3221,7 @@ RCOptionEditor::RCOptionEditor ()
 
 	add_option (_("Sync"), _sync_framerate);
 
-	// XXX TRANSPORTMASTER
+	// XXX TRANSPORTMASTERS
 #if 0
 	_sync_genlock = new BoolOption (
 		"timecode-source-is-synced",
@@ -4056,6 +4056,7 @@ RCOptionEditor::parameter_changed (string const & p)
 		_solo_control_is_listen_control->set_sensitive (s);
 		_listen_position->set_sensitive (s);
 	} else if (p == "sync-source") {
+#if 0 // XXX TRANSPORTMASTERS
 		_sync_source->set_sensitive (true);
 		if (_session) {
 			_sync_source->set_sensitive (!_session->config.get_external_sync());
@@ -4073,6 +4074,7 @@ RCOptionEditor::parameter_changed (string const & p)
 			_sync_source_2997->set_sensitive (false);
 			break;
 		}
+#endif
 	} else if (p == "send-ltc") {
 		bool const s = Config->get_send_ltc ();
 		_ltc_send_continuously->set_sensitive (s);

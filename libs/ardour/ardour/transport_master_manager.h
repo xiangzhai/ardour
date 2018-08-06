@@ -35,6 +35,8 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
   public:
 	~TransportMasterManager ();
 
+	int init ();
+
 	static TransportMasterManager& instance();
 
 	typedef std::list<boost::shared_ptr<TransportMaster> > TransportMasters;

@@ -380,7 +380,6 @@ public:
 
 	bool           did_reset_tc_format;
 	Timecode::TimecodeFormat saved_tc_format;
-	boost::shared_ptr<AudioPort> ltcport;
 
 	LTCDecoder *   decoder;
 	double         samples_per_ltc_frame;
@@ -405,6 +404,9 @@ public:
 	PBD::ScopedConnectionList port_connections;
 	PBD::ScopedConnection     config_connection;
         LatencyRange  ltc_slave_latency;
+
+        double _speed;
+        samplepos_t _position;
 };
 
 class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public TransportMasterViaMIDI {

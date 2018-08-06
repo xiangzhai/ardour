@@ -2996,40 +2996,6 @@ Session::reconnect_midi_scene_ports(bool inputs)
 }
 
 void
-Session::reconnect_mtc_ports ()
-{
-	boost::shared_ptr<MidiPort> mtc_in_ptr = _midi_ports->mtc_input_port();
-
-	if (!mtc_in_ptr) {
-		return;
-	}
-
-	mtc_in_ptr->disconnect_all ();
-
-	std::vector<EngineStateController::MidiPortState> midi_port_states;
-	EngineStateController::instance()->get_physical_midi_input_states (midi_port_states);
-
-	std::vector<EngineStateController::MidiPortState>::iterator state_iter = midi_port_states.begin();
-
-	for (; state_iter != midi_port_states.end(); ++state_iter) {
-		if (state_iter->available && state_iter->mtc_in) {
-			mtc_in_ptr->connect (state_iter->name);
-		}
-	}
-
-	if (!_midi_ports->mtc_input_port ()->connected () &&
-	    config.get_external_sync () &&
-	    (Config->get_sync_source () == MTC) ) {
-		config.set_external_sync (false);
-	}
-
-	if ( ARDOUR::Profile->get_trx () ) {
-		// Tracks need this signal to update timecode_source_dropdown
-		MtcOrLtcInputPortChanged (); //emit signal
-	}
-}
-
-void
 Session::reconnect_mmc_ports(bool inputs)
 {
 	if (inputs ) { // get all enabled midi input ports
@@ -7028,12 +6994,6 @@ boost::shared_ptr<Port>
 Session::ltc_output_port () const
 {
 	return _ltc_output ? _ltc_output->nth (0) : boost::shared_ptr<Port> ();
-}
-
-void
-Session::reconnect_ltc_input ()
-{
-	/* XXX do something */
 }
 
 void

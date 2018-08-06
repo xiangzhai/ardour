@@ -2134,3 +2134,14 @@ Session::sync_source_changed (SyncSource type, samplepos_t pos, pframes_t cycle_
 
 	set_dirty();
 }
+
+void
+Session::reset_slave_state ()
+{
+}
+
+bool
+Session::tracks_can_play (samplepos_t pos)
+{
+	return false;
+}

@@ -4106,8 +4106,6 @@ Session::config_changed (std::string p, bool ours)
 		last_timecode_valid = false;
 	} else if (p == "playback-buffer-seconds") {
 		AudioSource::allocate_working_buffers (sample_rate());
-	} else if (p == "ltc-source-port") {
-		reconnect_ltc_input ();
 	} else if (p == "ltc-sink-port") {
 		reconnect_ltc_output ();
 	} else if (p == "timecode-generator-offset") {

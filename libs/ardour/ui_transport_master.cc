@@ -22,6 +22,7 @@
 
 #include "ardour/audioengine.h"
 #include "ardour/debug.h"
+#include "ardour/session.h"
 #include "ardour/transport_master.h"
 
 using namespace ARDOUR;
@@ -100,10 +101,20 @@ UI_TransportMaster::speed_and_position (double & speed, samplepos_t & pos)
 
 	speed = _speed;
 	pos = _position.load();
+	return true;
 }
 
 void
 UI_TransportMaster::set_loop_location (Location* loc)
 {
 	_loop_location = loc;
+}
+
+Location*
+UI_TransportMaster::loop_location() const
+{
+	if (_session) {
+		return _session->locations()->auto_loop_location ();
+	}
+	return 0;
 }

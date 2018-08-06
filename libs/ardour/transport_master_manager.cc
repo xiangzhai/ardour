@@ -32,29 +32,42 @@ TransportMasterManager* TransportMasterManager::_instance = 0;
 TransportMasterManager::TransportMasterManager()
 	: _master_speed (0)
 	, _master_position (0)
+	, _ui_transport_master (0)
+	, _current_master (0)
 	, _session (0)
 {
-	/* setup default transport masters. Most people will never need any
-	   others, and likely most people won't use anything except the
-	   UI/Internal pseudo-master
-	*/
-	add (Engine, X_("JACK Transport"));
-	add (MTC, X_("MTC"));
-	add (LTC, X_("LTC"));
-	add (MIDIClock, X_("MIDI Clock"));
-	add (UI, X_("Internal"));
-
-	/* Use the UI/internal master by default. ::set_state() may reset this
-	 * later
-	 */
-
-	_current_master = _transport_masters.back();
-	_ui_transport_master = boost::dynamic_pointer_cast<UI_TransportMaster> (_transport_masters.back());
 }
 
 TransportMasterManager::~TransportMasterManager ()
 {
 	clear ();
+}
+
+int
+TransportMasterManager::init ()
+{
+	try {
+		/* setup default transport masters. Most people will never need any
+		   others, and likely most people won't use anything except the
+		   UI/Internal pseudo-master
+		*/
+		add (Engine, X_("JACK Transport"));
+		add (MTC, X_("MTC"));
+		add (LTC, X_("LTC"));
+		add (MIDIClock, X_("MIDI Clock"));
+		add (UI, X_("Internal"));
+
+		/* Use the UI/internal master by default. ::set_state() may reset this
+		 * later
+		 */
+	} catch (...) {
+		return -1;
+	}
+
+	_current_master = _transport_masters.back();
+	_ui_transport_master = boost::dynamic_pointer_cast<UI_TransportMaster> (_transport_masters.back());
+
+	return 0;
 }
 
 void
@@ -92,9 +105,11 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 		for (TransportMasters::iterator tm = _transport_masters.begin(); tm != _transport_masters.end(); ++tm) {
 			(*tm)->pre_process (nframes);
 		}
+
+		return compute_matching_master_speed (nframes, _session->transport_sample());
 	}
 
-	return compute_matching_master_speed (nframes, _session->transport_sample());
+	return 0.0;
 }
 
 double
@@ -193,8 +208,6 @@ TransportMasterManager::add (SyncSource type, std::string const & name)
 int
 TransportMasterManager::add_locked (boost::shared_ptr<TransportMaster> tm)
 {
-	Glib::Threads::RWLock::WriterLock lm (lock);
-
 	if (!tm) {
 		return -1;
 	}

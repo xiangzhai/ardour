@@ -84,9 +84,7 @@ class LIBARDOUR_API MidiPortManager {
     boost::shared_ptr<Port> _scene_out;
 
     /* synchronously handled ports: ARDOUR::MidiPort */
-    boost::shared_ptr<MidiPort> _mtc_input_port;
     boost::shared_ptr<MidiPort> _mtc_output_port;
-    boost::shared_ptr<MidiPort> _midi_clock_input_port;
     boost::shared_ptr<MidiPort> _midi_clock_output_port;
 
     void create_ports ();

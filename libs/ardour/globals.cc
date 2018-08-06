@@ -598,8 +598,14 @@ ARDOUR::init_post_engine ()
 		ControlProtocolManager::instance().set_state (*node, Stateful::loading_state_version);
 	}
 
-	if ((node = Config->transport_master_state()) != 0) {
-		TransportMasterManager::instance().set_state (*node, Stateful::loading_state_version);
+	if (TransportMasterManager::instance().init ()) {
+		error << _("Cannot initialize transport master manager") << endmsg;
+		/* XXX now what? */
+	} else {
+
+		if ((node = Config->transport_master_state()) != 0) {
+			TransportMasterManager::instance().set_state (*node, Stateful::loading_state_version);
+		}
 	}
 
 	/* find plugins */
@@ -608,7 +614,7 @@ ARDOUR::init_post_engine ()
 }
 
 void
-ARDOUR::cleanup ()
+	ARDOUR::cleanup ()
 {
 	if (!libardour_initialized) {
 		return;

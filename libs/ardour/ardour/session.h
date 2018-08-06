@@ -1190,10 +1190,8 @@ public:
 	MIDI::MachineControl& mmc() { return *_mmc; }
 
 	void reconnect_midi_scene_ports (bool);
-	void reconnect_mtc_ports ();
 	void reconnect_mmc_ports (bool);
 
-	void reconnect_ltc_input ();
 	void reconnect_ltc_output ();
 
 	VCAManager& vca_manager() { return *_vca_manager; }
