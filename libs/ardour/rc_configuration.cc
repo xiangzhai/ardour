@@ -189,6 +189,7 @@ RCConfiguration::get_state ()
 	}
 
 	root->add_child_nocopy (ControlProtocolManager::instance().get_state());
+	root->add_child_nocopy (TransportMasterManager::instance().get_state());
 
 	return *root;
 }

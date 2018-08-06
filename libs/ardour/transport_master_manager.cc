@@ -106,7 +106,9 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 			(*tm)->pre_process (nframes);
 		}
 
-		return compute_matching_master_speed (nframes, _session->transport_sample());
+		if (_session && _current_master) {
+			return compute_matching_master_speed (nframes, _session->transport_sample());
+		}
 	}
 
 	return 0.0;
@@ -159,6 +161,7 @@ TransportMasterManager::compute_matching_master_speed (pframes_t nframes, sample
 	}
 
 	/* speed is set, we're locked, and good to go */
+	DEBUG_TRACE (DEBUG::Slave, string_compose ("%1: computed speed-to-follow-master as %2\n", _current_master->name(), matching_master_speed));
 	return matching_master_speed;
 }
 
@@ -302,25 +305,29 @@ TransportMasterManager::clear ()
 int
 TransportMasterManager::set_state (XMLNode const & node, int version)
 {
-	Glib::Threads::RWLock::WriterLock lm (lock);
+	{
+		Glib::Threads::RWLock::WriterLock lm (lock);
 
-	assert (node.name() == state_node_name);
+		assert (node.name() == state_node_name);
 
-	XMLNodeList const & children = node.children();
+		XMLNodeList const & children = node.children();
 
-	_transport_masters.clear ();
-
-	for (XMLNodeList::const_iterator c = children.begin(); c != children.end(); ++c) {
-
-		boost::shared_ptr<TransportMaster> tm = TransportMaster::factory (**c);
-
-		if (add_locked (tm)) {
-			continue;
+		if (!children.empty()) {
+			_transport_masters.clear ();
 		}
 
-		/* we know it is the last thing added to the list of masters */
+		for (XMLNodeList::const_iterator c = children.begin(); c != children.end(); ++c) {
 
-		_transport_masters.back()->set_state (**c, version);
+			boost::shared_ptr<TransportMaster> tm = TransportMaster::factory (**c);
+
+			if (add_locked (tm)) {
+				continue;
+			}
+
+			/* we know it is the last thing added to the list of masters */
+
+			_transport_masters.back()->set_state (**c, version);
+		}
 	}
 
 	std::string current_master;
@@ -340,6 +347,12 @@ TransportMasterManager::get_state ()
 	XMLNode* node = new XMLNode (state_node_name);
 
 	node->set_property (X_("current"), _current_master->name());
+
+	Glib::Threads::RWLock::ReaderLock lm (lock);
+
+	for (TransportMasters::iterator t = _transport_masters.begin(); t != _transport_masters.end(); ++t) {
+		node->add_child_nocopy ((*t)->get_state());
+	}
 
 	return *node;
 }

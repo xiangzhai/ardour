@@ -60,6 +60,8 @@ LTC_TransportMaster::LTC_TransportMaster (std::string const & name)
 		throw failed_constructor();
 	}
 
+	DEBUG_TRACE (DEBUG::Slave, string_compose ("LTC registered %1\n", _port->name()));
+	
 	ltc_detect_fps_cnt = ltc_detect_fps_max = 0;
 	memset(&prev_sample, 0, sizeof(LTCFrameExt));
 

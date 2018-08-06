@@ -17,6 +17,8 @@
 
  */
 
+#include <vector>
+
 #include "pbd/i18n.h"
 
 #include "ardour/audioengine.h"
@@ -70,6 +72,23 @@ TransportMaster::set_session (Session* s)
 int
 TransportMaster::set_state (XMLNode const & node, int /* version */)
 {
+	XMLNode* pnode = node.child (X_("Port"));
+
+	if (pnode) {
+		XMLNodeList const & children = pnode->children();
+		for (XMLNodeList::const_iterator ci = children.begin(); ci != children.end(); ++ci) {
+
+			XMLProperty const *prop;
+
+			if ((*ci)->name() == X_("Connection")) {
+				if ((prop = (*ci)->property (X_("other"))) == 0) {
+					continue;
+				}
+				_port->connect (prop->value());
+			}
+		}
+	}
+
 	return 0;
 }
 
@@ -79,6 +98,37 @@ TransportMaster::get_state ()
 	XMLNode* node = new XMLNode (state_node_name);
 	node->set_property (X_("type"), _type);
 	node->set_property (X_("name"), _name);
+
+
+	if (_port) {
+		std::vector<std::string> connections;
+
+		XMLNode* pnode = new XMLNode (X_("Port"));
+
+		if (_port->get_connections (connections)) {
+
+			std::vector<std::string>::const_iterator ci;
+			std::sort (connections.begin(), connections.end());
+
+			for (ci = connections.begin(); ci != connections.end(); ++ci) {
+
+				/* if its a connection to our own port,
+				   return only the port name, not the
+				   whole thing. this allows connections
+				   to be re-established even when our
+				   client name is different.
+				*/
+
+				XMLNode* cnode = new XMLNode (X_("Connection"));
+
+				cnode->set_property (X_("other"), AudioEngine::instance()->make_port_name_relative (*ci));
+				pnode->add_child_nocopy (*cnode);
+			}
+		}
+
+		node->add_child_nocopy (*pnode);
+	}
+
 	return *node;
 }
 
@@ -145,4 +195,3 @@ TransportMasterViaMIDI::update_from_midi (pframes_t nframes)
 {
 	_midi_port->read_and_parse_entire_midi_buffer_with_no_speed_adjustment (nframes, parser);
 }
-

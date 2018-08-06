@@ -73,6 +73,8 @@ MTC_TransportMaster::MTC_TransportMaster (std::string const & name)
 		throw failed_constructor();
 	}
 
+	DEBUG_TRACE (DEBUG::Slave, string_compose ("MTC registered %1\n", _port->name()));
+
 	reset (true);
 }
 

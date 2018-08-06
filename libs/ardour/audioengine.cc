@@ -368,7 +368,6 @@ AudioEngine::process_callback (pframes_t nframes)
 
 	if (!_freewheeling || Freewheel.empty()) {
 		const double session_speed = tmm.pre_process_transport_masters (nframes, _session->transport_sample());
-		DEBUG_TRACE (DEBUG::Slave, string_compose ("session computed speed-to-follow-master as ^1\n", session_speed));
 		Port::set_speed_ratio (session_speed);
 	}
 
