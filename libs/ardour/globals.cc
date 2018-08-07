@@ -598,13 +598,15 @@ ARDOUR::init_post_engine ()
 		ControlProtocolManager::instance().set_state (*node, Stateful::loading_state_version);
 	}
 
-	if (TransportMasterManager::instance().init ()) {
-		error << _("Cannot initialize transport master manager") << endmsg;
-		/* XXX now what? */
+	if ((node = Config->transport_master_state()) != 0) {
+		if (TransportMasterManager::instance().set_state (*node, Stateful::loading_state_version)) {
+			error << _("Cannot restore transport master manager") << endmsg;
+			/* XXX now what? */
+		}
 	} else {
-
-		if ((node = Config->transport_master_state()) != 0) {
-			TransportMasterManager::instance().set_state (*node, Stateful::loading_state_version);
+		if (TransportMasterManager::instance().init ()) {
+			error << _("Cannot initialize transport master manager") << endmsg;
+			/* XXX now what? */
 		}
 	}
 

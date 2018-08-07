@@ -450,7 +450,8 @@ Session::process_with_events (pframes_t nframes)
 		}
 
 		if (!_exporting) {
-			if (!follow_transport_master (nframes)) {
+			if (TransportMasterManager::instance().master_invalid_this_cycle()) {
+				no_roll (nframes);
 				return;
 			}
 		}
@@ -566,130 +567,6 @@ Session::transport_locked () const
 	return false;
 }
 
-bool
-Session::follow_transport_master (pframes_t nframes)
-{
-	/* We have the following goals here:
-
-	    - check transport master state, and use no_roll() if the master is in a state that cannot be used.
-	    - notice if the master changed direction, and respond appropriately if it has
-	    - decide whether or not to silence disk output if we're not close enough to the transport master position
-
-	  If we return true, normally processing will continue. If we return false, the calling process function will
-	  return prematurely. We must therefore ensure we have done all necessary things before returning false.
-	*/
-
-	TransportMasterManager& tmm (TransportMasterManager::instance());
-	boost::shared_ptr<TransportMaster> master = tmm.current();
-
-	if (!master->ok()) {
-		stop_transport ();
-		DEBUG_TRACE (DEBUG::Slave, "no roll2\n");
-		no_roll (nframes);
-		return false;
-	}
-
-	const double master_speed = tmm.get_current_speed_in_process_context();
-	const samplepos_t master_position = tmm.get_current_position_in_process_context();
-	const double delta = master_position - _transport_sample;
-
-	DEBUG_TRACE (DEBUG::Slave, string_compose ("Slave position %1 speed %2\n", master_position, master_speed));
-
-	if (!master->locked()) {
-		DEBUG_TRACE (DEBUG::Slave, "no roll2\n");
-		no_roll (nframes);
-		return false;
-	}
-
-	if (master_speed != 0.0f) {
-
-		/* transport master is moving */
-
-		switch (transport_master_tracking_state) {
-		case Stopped:
-
-			/* it was stopped, and has now restarted. get its position, check if we can already play audio for the right spot,
-			   and locate if needed.
-			*/
-
-			if (master->requires_seekahead()) {
-				master_wait_end = master_position + master->seekahead_distance ();
-				if (!tracks_can_play (master_wait_end)) {
-					locate (master_wait_end, false, false);
-					transport_master_tracking_state = Waiting;
-				} else {
-					transport_master_tracking_state = Running;
-				}
-
-			} else {
-
-				if (!tracks_can_play (master_position)) {
-					locate (master_position, false, false);
-				} else {
-					_transport_sample = master_position;
-					transport_master_tracking_state = Running;
-				}
-			}
-			break;
-
-		case Waiting:
-			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave waiting at %1\n", master_position));
-
-			if (master_position >= master_wait_end) {
-
-				DEBUG_TRACE (DEBUG::Slave, string_compose ("slave start at %1 vs %2\n", master_position, _transport_sample));
-
-				assert (tracks_can_play (master_position));
-				_transport_sample = master_position;
-				transport_master_tracking_state = Running;
-			}
-			break;
-
-#if __cplusplus > 199711L
-#define local_signbit(x) std::signbit (x)
-#else
-#define local_signbit(x) ((((__int64*)(&z))*) & 0x8000000000000000)
-#endif
-
-		case Running:
-			if (_transport_speed == 0.0f) {
-				DEBUG_TRACE (DEBUG::Slave, "slave starts transport\n");
-				start_transport ();
-			} else if (local_signbit (master_speed) != local_signbit (_last_transport_speed)) {
-				/* master changed direction, so reset speed */
-				set_transport_speed (master_speed > 0.0 ? 1.0 : -1.0 , _transport_sample, false, false, false);
-			}
-			break;
-		}
-
-	} else { // slave_speed is 0
-
-		/* slave has stopped */
-
-		if (_transport_speed != 0.0f) {
-			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stops transport: %1 sample %2 tf %3\n", master_speed, master_position, _transport_sample));
-			stop_transport ();
-		}
-
-		if (master_position != _transport_sample) {
-			if (!tracks_can_play (master_position)) {
-				DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stopped, move to %1\n", master_position));
-				force_locate (master_position, false);
-			}
-		}
-
-		transport_master_tracking_state = Stopped;
-	}
-
-	if (!actively_recording() && delta > master->resolution()) {
-		DEBUG_TRACE (DEBUG::Slave, string_compose ("slave delta %1 greater than slave resolution %2 => no disk output\n", delta, master->resolution()));
-		/* run routes as normal, but no disk output */
-		DiskReader::set_no_disk_output (true);
-	}
-
-	return true;
-}
-
 void
 Session::process_without_events (pframes_t nframes)
 {
@@ -702,7 +579,8 @@ Session::process_without_events (pframes_t nframes)
 	}
 
 	if (!_exporting) {
-		if (!follow_transport_master (nframes)) {
+		if (TransportMasterManager::instance().master_invalid_this_cycle()) {
+			no_roll (nframes);
 			ltc_tx_send_time_code_for_cycle (_transport_sample, _transport_sample, 0, 0 , nframes);
 			return;
 		}

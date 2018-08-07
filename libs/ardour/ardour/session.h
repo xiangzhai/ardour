@@ -418,8 +418,8 @@ public:
 
 	void request_roll_at_and_return (samplepos_t start, samplepos_t return_to);
 	void request_bounded_roll (samplepos_t start, samplepos_t end);
-	void request_stop (bool abort = false, bool clear_state = false);
-	void request_locate (samplepos_t sample, bool with_roll = false);
+	void request_stop (bool abort = false, bool clear_state = false, SyncSource origin = UI);
+	void request_locate (samplepos_t sample, bool with_roll = false, SyncSource origin = UI);
 
 	void request_play_loop (bool yn, bool leave_rolling = false);
 	bool get_play_loop () const { return play_loop; }
@@ -429,8 +429,8 @@ public:
 	void goto_start (bool and_roll = false);
 	void use_rf_shuttle_speed ();
 	void allow_auto_play (bool yn);
-	void request_transport_speed (double speed, bool as_default = true);
-	void request_transport_speed_nonzero (double, bool as_default = true);
+	void request_transport_speed (double speed, bool as_default = true, SyncSource origin = UI);
+	void request_transport_speed_nonzero (double, bool as_default = true, SyncSource origin = UI);
 	void request_overwrite_buffer (boost::shared_ptr<Route>);
 	void adjust_playback_buffering();
 	void adjust_capture_buffering();
@@ -1309,20 +1309,7 @@ private:
 	/* Transport master DLL */
 
 	void sync_source_changed (SyncSource, samplepos_t pos, pframes_t cycle_nframes);
-	bool follow_transport_master (pframes_t);
-	bool tracks_can_play (samplepos_t);
-
-	enum TransportMasterState {
-		Stopped, /* no incoming or invalid signal/data for master to run with */
-		Waiting, /* waiting to get full lock on incoming signal/data */
-		Running  /* lock achieved, master is generating meaningful speed & position */
-	};
-
-	TransportMasterState transport_master_tracking_state;
-	samplepos_t master_wait_end;
-
 	void reset_slave_state ();
-	double follow_master (pframes_t);
 
 	bool post_export_sync;
 	samplepos_t post_export_position;

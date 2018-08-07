@@ -2372,6 +2372,8 @@ ARDOUR_UI::toggle_roll (bool with_abort, bool roll_out_of_bounded_mode)
 	bool rolling = _session->transport_rolling();
 	bool affect_transport = true;
 
+	cerr << "TOGGLE ROLL, rolling = " << rolling << endl;
+
 	if (rolling && roll_out_of_bounded_mode) {
 		/* drop out of loop/range playback but leave transport rolling */
 		if (_session->get_play_loop()) {

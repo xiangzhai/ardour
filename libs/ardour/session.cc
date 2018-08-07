@@ -208,7 +208,6 @@ Session::Session (AudioEngine &eng,
 	, _was_seamless (Config->get_seamless_loop ())
 	, _under_nsm_control (false)
 	, _xrun_count (0)
-	, transport_master_tracking_state (Stopped)
 	, post_export_sync (false)
 	, post_export_position (0)
 	, _exporting (false)

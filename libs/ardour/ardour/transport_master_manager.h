@@ -64,6 +64,8 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
 	void set_session (Session*);
 	Session* session() const { return _session; }
 
+	bool master_invalid_this_cycle() const { return _master_invalid_this_cycle; }
+
 	static const std::string state_node_name;
 
   private:
@@ -76,6 +78,16 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
 	boost::shared_ptr<UI_TransportMaster> _ui_transport_master;
 	boost::shared_ptr<TransportMaster>    _current_master;
 	Session* _session;
+
+	enum TransportMasterState {
+		Stopped, /* no incoming or invalid signal/data for master to run with */
+		Waiting, /* waiting to get full lock on incoming signal/data */
+		Running  /* lock achieved, master is generating meaningful speed & position */
+	};
+
+	TransportMasterState transport_master_tracking_state;
+	samplepos_t master_wait_end;
+	bool _master_invalid_this_cycle;
 
 	// a DLL to chase the transport master
 

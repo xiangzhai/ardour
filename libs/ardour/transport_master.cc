@@ -142,11 +142,11 @@ TransportMaster::factory (XMLNode const & node)
 	SyncSource type;
 	std::string name;
 
-	if (node.get_property (X_("type"), type) != 0) {
+	if (!node.get_property (X_("type"), type)) {
 		return boost::shared_ptr<TransportMaster>();
 	}
 
-	if (node.get_property (X_("name"), name) != 0) {
+	if (!node.get_property (X_("name"), name)) {
 		return boost::shared_ptr<TransportMaster>();
 	}
 

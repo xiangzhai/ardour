@@ -17,8 +17,8 @@
 
 */
 
-#ifndef __ardour_slave_h__
-#define __ardour_slave_h__
+#ifndef __ardour_transport_master_h__
+#define __ardour_transport_master_h__
 
 #include <vector>
 
@@ -540,4 +540,4 @@ class LIBARDOUR_API UI_TransportMaster : public TransportMaster
 
 } /* namespace */
 
-#endif /* __ardour_slave_h__ */
+#endif /* __ardour_transport_master_h__ */

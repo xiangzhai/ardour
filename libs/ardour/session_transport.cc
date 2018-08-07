@@ -80,8 +80,11 @@ Session::add_post_transport_work (PostTransportWork ptw)
 }
 
 void
-Session::request_transport_speed (double speed, bool as_default)
+Session::request_transport_speed (double speed, bool as_default, SyncSource origin)
 {
+	if (origin != TransportMasterManager::instance().current()->type()) {
+		return;
+	}
 	SessionEvent* ev = new SessionEvent (SessionEvent::SetTransportSpeed, SessionEvent::Add, SessionEvent::Immediate, 0, speed);
 	ev->third_yes_or_no = as_default; // as_default
 	DEBUG_TRACE (DEBUG::Transport, string_compose ("Request transport speed = %1 as default = %2\n", speed, as_default));
@@ -93,8 +96,11 @@ Session::request_transport_speed (double speed, bool as_default)
  *  be used by callers who are varying transport speed but don't ever want to stop it.
  */
 void
-Session::request_transport_speed_nonzero (double speed, bool as_default)
+Session::request_transport_speed_nonzero (double speed, bool as_default, SyncSource origin)
 {
+	if (origin != TransportMasterManager::instance().current()->type()) {
+		return;
+	}
 	if (speed == 0) {
 		speed = DBL_EPSILON;
 	}
@@ -103,16 +109,22 @@ Session::request_transport_speed_nonzero (double speed, bool as_default)
 }
 
 void
-Session::request_stop (bool abort, bool clear_state)
+Session::request_stop (bool abort, bool clear_state, SyncSource origin)
 {
+	if (origin != TransportMasterManager::instance().current()->type()) {
+		return;
+	}
 	SessionEvent* ev = new SessionEvent (SessionEvent::SetTransportSpeed, SessionEvent::Add, SessionEvent::Immediate, audible_sample(), 0.0, abort, clear_state);
 	DEBUG_TRACE (DEBUG::Transport, string_compose ("Request transport stop, audible %3 transport %4 abort = %1, clear state = %2\n", abort, clear_state, audible_sample(), _transport_sample));
 	queue_event (ev);
 }
 
 void
-Session::request_locate (samplepos_t target_sample, bool with_roll)
+Session::request_locate (samplepos_t target_sample, bool with_roll, SyncSource origin)
 {
+	if (origin != TransportMasterManager::instance().current()->type()) {
+		return;
+	}
 	SessionEvent *ev = new SessionEvent (with_roll ? SessionEvent::LocateRoll : SessionEvent::Locate, SessionEvent::Add, SessionEvent::Immediate, target_sample, 0, false);
 	DEBUG_TRACE (DEBUG::Transport, string_compose ("Request locate to %1\n", target_sample));
 	queue_event (ev);
@@ -2062,8 +2074,6 @@ Session::sync_source_changed (SyncSource type, samplepos_t pos, pframes_t cycle_
 {
 	/* Runs in process() context */
 
-	transport_master_tracking_state = Stopped;
-
 	boost::shared_ptr<TransportMaster> master = TransportMasterManager::instance().current();
 
 	/* save value of seamless from before the switch */
@@ -2138,10 +2148,4 @@ Session::sync_source_changed (SyncSource type, samplepos_t pos, pframes_t cycle_
 void
 Session::reset_slave_state ()
 {
-}
-
-bool
-Session::tracks_can_play (samplepos_t pos)
-{
-	return false;
 }

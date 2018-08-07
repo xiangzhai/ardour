@@ -46,7 +46,6 @@ UI_TransportMaster::pre_process (pframes_t)
 
 	if (lm.locked()) {
 		_speed = _requested_speed;
-		_position = _requested_position;
 	} else {
 		/* catch it next time */
 	}
@@ -65,7 +64,7 @@ UI_TransportMaster::post_process (pframes_t nframes)
 	 * failed.
 	 */
 
-	_position.compare_exchange_strong (_session_owns_this, _session_owns_this + nframes);
+	_position.compare_exchange_strong (_session_owns_this, _session_owns_this + floor (_speed * nframes));
 }
 
 void
@@ -82,10 +81,9 @@ UI_TransportMaster::speed() const
 }
 
 void
-UI_TransportMaster::set_position (samplepos_t position)
+UI_TransportMaster::set_position (samplepos_t pos)
 {
-	Glib::Threads::RWLock::WriterLock lm (speed_pos_lock);
-	_requested_position = position;
+	_position.store (pos);
 }
 
 samplepos_t
@@ -101,6 +99,8 @@ UI_TransportMaster::speed_and_position (double & speed, samplepos_t & pos)
 
 	speed = _speed;
 	pos = _position.load();
+
+	std::cerr << "UI @ " << pos << " speed " << _speed << " req " << _requested_speed << std::endl;
 	return true;
 }
 
