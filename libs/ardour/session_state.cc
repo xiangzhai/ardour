@@ -4071,11 +4071,7 @@ Session::config_changed (std::string p, bool ours)
 		first_file_data_format_reset = false;
 
 	} else if (p == "external-sync") {
-		if (!config.get_external_sync()) {
-			TransportMasterManager::instance().set_current (UI);
-		} else {
-			TransportMasterManager::instance().set_current (Config->get_sync_source());
-		}
+		TransportMasterManager::instance().set_current (Config->get_sync_source());
 	}  else if (p == "denormal-model") {
 		setup_fpu ();
 	} else if (p == "history-depth") {

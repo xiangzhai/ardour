@@ -33,7 +33,6 @@ TransportMasterManager* TransportMasterManager::_instance = 0;
 TransportMasterManager::TransportMasterManager()
 	: _master_speed (0)
 	, _master_position (0)
-	, _ui_transport_master (0)
 	, _current_master (0)
 	, _session (0)
 	, transport_master_tracking_state (Stopped)
@@ -52,24 +51,17 @@ TransportMasterManager::init ()
 {
 	try {
 		/* setup default transport masters. Most people will never need any
-		   others, and likely most people won't use anything except the
-		   UI/Internal pseudo-master
+		   others
 		*/
 		add (Engine, X_("JACK Transport"));
 		add (MTC, X_("MTC"));
 		add (LTC, X_("LTC"));
 		add (MIDIClock, X_("MIDI Clock"));
-		add (UI, X_("Internal"));
-
-		/* Use the UI/internal master by default. ::set_state() may reset this
-		 * later
-		 */
 	} catch (...) {
 		return -1;
 	}
 
 	_current_master = _transport_masters.back();
-	_ui_transport_master = boost::dynamic_pointer_cast<UI_TransportMaster> (_transport_masters.back());
 
 	return 0;
 }
@@ -138,10 +130,8 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 	   return prematurely. We must therefore ensure we have done all necessary things before returning false.
 	*/
 
-	TransportMasterManager& tmm (TransportMasterManager::instance());
-
 	if (!_current_master->ok()) {
-		_session->request_transport_speed (0.0, false, _current_master->type());
+		_session->request_transport_speed (0.0, false, _current_master->request_type());
 		DEBUG_TRACE (DEBUG::Slave, "no roll2\n");
 		_master_invalid_this_cycle = true;
 		return 1.0;
@@ -177,10 +167,10 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 
 			if (_current_master->requires_seekahead()) {
 				master_wait_end = master_position + _current_master->seekahead_distance ();
-				_session->request_locate (master_wait_end, false, _current_master->type());
+				_session->request_locate (master_wait_end, false, _current_master->request_type());
 				transport_master_tracking_state = Waiting;
 			} else {
-				_session->request_locate (master_position, false, _current_master->type());
+				_session->request_locate (master_position, false, _current_master->request_type());
 				transport_master_tracking_state = Running;
 			}
 			break;
@@ -192,7 +182,7 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 
 				DEBUG_TRACE (DEBUG::Slave, string_compose ("slave start at %1 vs %2\n", master_position, _session->transport_sample()));
 
-				_session->request_locate (master_position, false, _current_master->type());
+				_session->request_locate (master_position, false, _current_master->request_type());
 				transport_master_tracking_state = Running;
 			}
 			break;
@@ -206,10 +196,10 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 		case Running:
 			if (!_session->transport_rolling()) {
 				DEBUG_TRACE (DEBUG::Slave, "slave starts transport\n");
-				_session->request_transport_speed (session_speed, false, _current_master->type());
+				_session->request_transport_speed (session_speed, false, _current_master->request_type());
 			} else if (local_signbit (master_speed) != local_signbit (_session->transport_speed())) {
 				/* master changed direction, so reset speed */
-				_session->request_transport_speed (session_speed, false, _current_master->type());
+				_session->request_transport_speed (session_speed, false, _current_master->request_type());
 			}
 			break;
 		}
@@ -220,12 +210,12 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 
 		if (_session->transport_rolling()) {
 			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stops transport: %1 sample %2 tf %3\n", master_speed, master_position, _session->transport_sample()));
-			_session->request_transport_speed (0.0, false, _current_master->type());
+			_session->request_transport_speed (0.0, false, _current_master->request_type());
 		}
 
 		if (master_position != _session->transport_sample()) {
 			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stopped, move to %1\n", master_position));
-			_session->request_locate (master_position, false, _current_master->type());
+			_session->request_locate (master_position, false, _current_master->request_type());
 		}
 
 		transport_master_tracking_state = Stopped;
@@ -246,16 +236,8 @@ TransportMasterManager::compute_matching_master_speed (pframes_t nframes, sample
 {
 	assert (_current_master);
 
-  restart:
 	if (!_current_master->speed_and_position (_master_speed, _master_position)) {
-
-		assert (_current_master->type() != UI);
-
-		/* switch back to default master - our own UI */
-		TransportMasterManager::instance().set_current (UI);
-
-		/* now do it all again with the UI/internal master */
-		goto restart;
+		return 1.0;
 	}
 
 	/* compute delta or "error" between session and the master's
@@ -456,23 +438,15 @@ TransportMasterManager::set_state (XMLNode const & node, int version)
 			/* we know it is the last thing added to the list of masters */
 
 			_transport_masters.back()->set_state (**c, version);
-
-			if (tm->type() == UI) {
-				_ui_transport_master = boost::dynamic_pointer_cast<UI_TransportMaster> (tm);
-			}
 		}
-
-
 	}
 
 	std::string current_master;
 	if (node.get_property (X_("current"), current_master)) {
 		set_current (current_master);
 	} else {
-		set_current (UI);
+		set_current (MTC);
 	}
-
-	assert (_ui_transport_master);
 
 	return 0;
 }

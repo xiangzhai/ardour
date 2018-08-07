@@ -394,7 +394,6 @@ setup_enum_writer ()
 	REGISTER_ENUM (Engine);
 	REGISTER_ENUM (MIDIClock);
 	REGISTER_ENUM (LTC);
-	REGISTER_ENUM (UI);
 	REGISTER (_SyncSource);
 
 	REGISTER_ENUM (Sprung);

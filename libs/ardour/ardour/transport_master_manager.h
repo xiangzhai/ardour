@@ -56,8 +56,6 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
 	int set_current (SyncSource);
 	int set_current (std::string const &);
 
-	static boost::shared_ptr<UI_TransportMaster> ui_transport_master() { return instance()._ui_transport_master; }
-
 	int set_state (XMLNode const &, int);
 	XMLNode& get_state();
 
@@ -75,7 +73,6 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
 	Glib::Threads::RWLock  lock;
 	double                _master_speed;
 	samplepos_t           _master_position;
-	boost::shared_ptr<UI_TransportMaster> _ui_transport_master;
 	boost::shared_ptr<TransportMaster>    _current_master;
 	Session* _session;
 

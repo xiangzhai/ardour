@@ -977,9 +977,6 @@ AudioClock::set_slave_info ()
 				_right_btn.set_text ("", true);
 			}
 			break;
-		case UI:
-			/* non-possible */
-			break;
 		}
 	} else {
 		_left_btn.set_text (string_compose ("%1/%2", _("INT"), sync_source_to_string (sync_src, true)), true);

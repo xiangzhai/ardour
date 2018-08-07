@@ -80,9 +80,9 @@ Session::add_post_transport_work (PostTransportWork ptw)
 }
 
 void
-Session::request_transport_speed (double speed, bool as_default, SyncSource origin)
+Session::request_transport_speed (double speed, bool as_default, TransportRequestSource origin)
 {
-	if (origin != TransportMasterManager::instance().current()->type()) {
+	if (origin != TransportMasterManager::instance().current()->request_type()) {
 		return;
 	}
 	SessionEvent* ev = new SessionEvent (SessionEvent::SetTransportSpeed, SessionEvent::Add, SessionEvent::Immediate, 0, speed);
@@ -96,9 +96,9 @@ Session::request_transport_speed (double speed, bool as_default, SyncSource orig
  *  be used by callers who are varying transport speed but don't ever want to stop it.
  */
 void
-Session::request_transport_speed_nonzero (double speed, bool as_default, SyncSource origin)
+Session::request_transport_speed_nonzero (double speed, bool as_default, TransportRequestSource origin)
 {
-	if (origin != TransportMasterManager::instance().current()->type()) {
+	if (origin != TransportMasterManager::instance().current()->request_type()) {
 		return;
 	}
 	if (speed == 0) {
@@ -109,9 +109,9 @@ Session::request_transport_speed_nonzero (double speed, bool as_default, SyncSou
 }
 
 void
-Session::request_stop (bool abort, bool clear_state, SyncSource origin)
+Session::request_stop (bool abort, bool clear_state, TransportRequestSource origin)
 {
-	if (origin != TransportMasterManager::instance().current()->type()) {
+	if (origin != TransportMasterManager::instance().current()->request_type()) {
 		return;
 	}
 	SessionEvent* ev = new SessionEvent (SessionEvent::SetTransportSpeed, SessionEvent::Add, SessionEvent::Immediate, audible_sample(), 0.0, abort, clear_state);
@@ -120,9 +120,9 @@ Session::request_stop (bool abort, bool clear_state, SyncSource origin)
 }
 
 void
-Session::request_locate (samplepos_t target_sample, bool with_roll, SyncSource origin)
+Session::request_locate (samplepos_t target_sample, bool with_roll, TransportRequestSource origin)
 {
-	if (origin != TransportMasterManager::instance().current()->type()) {
+	if (origin != TransportMasterManager::instance().current()->request_type()) {
 		return;
 	}
 	SessionEvent *ev = new SessionEvent (with_roll ? SessionEvent::LocateRoll : SessionEvent::Locate, SessionEvent::Add, SessionEvent::Immediate, target_sample, 0, false);
@@ -2066,7 +2066,7 @@ Session::transport_master() const
 bool
 Session::transport_master_is_external () const
 {
-	return TransportMasterManager::instance().current()->type() != UI;
+	return config.get_external_sync();
 }
 
 void
@@ -2133,7 +2133,7 @@ Session::sync_source_changed (SyncSource type, samplepos_t pos, pframes_t cycle_
 	_send_timecode_update = true;
 
 	boost::shared_ptr<RouteList> rl = routes.reader();
-	const bool externally_slaved = (master->type() != UI);
+	const bool externally_slaved = transport_master_is_external();
 
 	for (RouteList::iterator i = rl->begin(); i != rl->end(); ++i) {
 		boost::shared_ptr<Track> tr = boost::dynamic_pointer_cast<Track> (*i);

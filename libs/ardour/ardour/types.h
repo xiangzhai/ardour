@@ -558,7 +558,15 @@ namespace ARDOUR {
 		MTC,
 		MIDIClock,
 		LTC,
-		UI,
+	};
+
+	enum TransportRequestSource {
+		TRS_Engine,
+		TRS_MTC,
+		TRS_MIDIClock,
+		TRS_LTC,
+		TRS_MMC,
+		TRS_UI,
 	};
 
 	enum ShuttleBehaviour {

@@ -962,7 +962,7 @@ Session::compute_stop_limit () const
 		return max_samplepos;
 	}
 
-	if (TransportMasterManager::instance().current()->type() != UI) {
+	if (config.get_external_sync()) {
 		return max_samplepos;
 	}
 

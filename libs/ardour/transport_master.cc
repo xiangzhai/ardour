@@ -167,8 +167,6 @@ TransportMaster::factory (SyncSource type, std::string const& name)
 		return boost::shared_ptr<TransportMaster> (new MIDIClock_TransportMaster (sync_source_to_string (type)));
 	case Engine:
 		return boost::shared_ptr<TransportMaster> (new Engine_TransportMaster (*AudioEngine::instance()));
-	case UI:
-		return boost::shared_ptr<TransportMaster> (new UI_TransportMaster ());
 	default:
 		break;
 	}

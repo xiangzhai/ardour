@@ -188,6 +188,20 @@ class LIBARDOUR_API TransportMaster {
 	bool has_loop() const { return loop_location() != 0; }
 
 	SyncSource type() const { return _type; }
+	TransportRequestSource request_type() const {
+		switch (_type) {
+		case Engine: /* also JACK */
+			return TRS_Engine;
+		case MTC:
+			return TRS_MTC;
+		case LTC:
+			return TRS_LTC;
+		case MIDIClock:
+			break;
+		}
+		return TRS_MIDIClock;
+	}
+
 	std::string name() const { return _name; }
 	void set_name (std::string const &);
 
@@ -490,52 +504,6 @@ class LIBARDOUR_API Engine_TransportMaster : public TransportMaster
   private:
         AudioEngine& engine;
         bool _starting;
-};
-
-class LIBARDOUR_API UI_TransportMaster : public TransportMaster
-{
-  public:
-	UI_TransportMaster ();
-
-	void pre_process (pframes_t);
-	void post_process (pframes_t);
-
-	void set_speed (double);
-	void set_position (samplepos_t);
-
-	double speed() const;
-	samplepos_t position() const;
-
-	bool        speed_and_position (double& speed, samplepos_t& position);
-	bool        locked() const { return true; }
-	bool        ok() const { return true; }
-	bool        starting() const { return false; }
-	samplecnt_t resolution() const { return 1; }
-	bool        requires_seekahead () const { return false; }
-	samplecnt_t seekahead_distance() const { return 0; }
-	bool        sample_clock_synced() const { return false; }
-	bool        can_loop() const { return true; }
-	Location* loop_location() const;
-
-	/* Only the Session should ever call these. The UI transport master
-	 * does not advance by itself (how could it?) so the Session is
-	 * responsible for moving it at the end of process()
-	 */
-
-	void session_update_position (samplepos_t);
-	void session_start_process ();
-	void session_end_process ();
-
-	void set_loop_location (Location* loc);
-
-  private:
-	Glib::Threads::RWLock speed_pos_lock;
-	double      _speed;
-	boost::atomic<samplepos_t> _position;
-	samplepos_t _session_owns_this;
-	double      _requested_speed;
-	samplepos_t _requested_position;
-	Location*   _loop_location;
 };
 
 } /* namespace */

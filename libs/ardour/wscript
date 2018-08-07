@@ -249,7 +249,6 @@ libardour_sources = [
         'transport_master.cc',
         'transport_master_manager.cc',
         'transpose.cc',
-        'ui_transport_master.cc',
         'unknown_processor.cc',
         'user_bundle.cc',
         'utils.cc',
