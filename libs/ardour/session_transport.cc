@@ -79,10 +79,23 @@ Session::add_post_transport_work (PostTransportWork ptw)
 	error << "Could not set post transport work! Crazy thread madness, call the programmers" << endmsg;
 }
 
+bool
+Session::should_ignore_transport_request (TransportRequestSource src) const
+{
+	if (config.get_external_sync()) {
+		if (src != TransportMasterManager::instance().current()->request_type()) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+	return false;
+}
+
 void
 Session::request_transport_speed (double speed, bool as_default, TransportRequestSource origin)
 {
-	if (origin != TransportMasterManager::instance().current()->request_type()) {
+	if (should_ignore_transport_request (origin)) {
 		return;
 	}
 	SessionEvent* ev = new SessionEvent (SessionEvent::SetTransportSpeed, SessionEvent::Add, SessionEvent::Immediate, 0, speed);
@@ -98,9 +111,10 @@ Session::request_transport_speed (double speed, bool as_default, TransportReques
 void
 Session::request_transport_speed_nonzero (double speed, bool as_default, TransportRequestSource origin)
 {
-	if (origin != TransportMasterManager::instance().current()->request_type()) {
+	if (should_ignore_transport_request (origin)) {
 		return;
 	}
+
 	if (speed == 0) {
 		speed = DBL_EPSILON;
 	}
@@ -111,9 +125,10 @@ Session::request_transport_speed_nonzero (double speed, bool as_default, Transpo
 void
 Session::request_stop (bool abort, bool clear_state, TransportRequestSource origin)
 {
-	if (origin != TransportMasterManager::instance().current()->request_type()) {
+	if (should_ignore_transport_request (origin)) {
 		return;
 	}
+
 	SessionEvent* ev = new SessionEvent (SessionEvent::SetTransportSpeed, SessionEvent::Add, SessionEvent::Immediate, audible_sample(), 0.0, abort, clear_state);
 	DEBUG_TRACE (DEBUG::Transport, string_compose ("Request transport stop, audible %3 transport %4 abort = %1, clear state = %2\n", abort, clear_state, audible_sample(), _transport_sample));
 	queue_event (ev);
@@ -122,9 +137,10 @@ Session::request_stop (bool abort, bool clear_state, TransportRequestSource orig
 void
 Session::request_locate (samplepos_t target_sample, bool with_roll, TransportRequestSource origin)
 {
-	if (origin != TransportMasterManager::instance().current()->request_type()) {
+	if (should_ignore_transport_request (origin)) {
 		return;
 	}
+
 	SessionEvent *ev = new SessionEvent (with_roll ? SessionEvent::LocateRoll : SessionEvent::Locate, SessionEvent::Add, SessionEvent::Immediate, target_sample, 0, false);
 	DEBUG_TRACE (DEBUG::Transport, string_compose ("Request locate to %1\n", target_sample));
 	queue_event (ev);
