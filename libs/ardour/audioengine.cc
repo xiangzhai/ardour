@@ -367,8 +367,9 @@ AudioEngine::process_callback (pframes_t nframes)
 	}
 
 	if (!_freewheeling || Freewheel.empty()) {
-		const double session_speed = tmm.pre_process_transport_masters (nframes, _session->transport_sample());
-		Port::set_speed_ratio (session_speed);
+		const double engine_speed = tmm.pre_process_transport_masters (nframes, _session->transport_sample());
+		DEBUG_TRACE (DEBUG::Slave, string_compose ("transport master (current=%1) gives speed %2\n", tmm.current()->name(), engine_speed));
+		Port::set_speed_ratio (engine_speed);
 	}
 
 	/* tell all relevant objects that we're starting a new cycle */

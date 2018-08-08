@@ -61,7 +61,7 @@ LTC_TransportMaster::LTC_TransportMaster (std::string const & name)
 	}
 
 	DEBUG_TRACE (DEBUG::Slave, string_compose ("LTC registered %1\n", _port->name()));
-	
+
 	ltc_detect_fps_cnt = ltc_detect_fps_max = 0;
 	memset(&prev_sample, 0, sizeof(LTCFrameExt));
 
@@ -354,7 +354,7 @@ LTC_TransportMaster::process_ltc(samplepos_t const /*now*/)
 			fps_detected=true;
 		}
 
-#if 0 // Devel/Debug
+#if 1 // Devel/Debug
 		fprintf(stdout, "LTC %02d:%02d:%02d%c%02d | %8lld %8lld%s\n",
 			stime.hours,
 			stime.mins,
@@ -475,7 +475,8 @@ LTC_TransportMaster::pre_process (pframes_t nframes)
 
 	sampleoffset_t skip = now - (monotonic_cnt + nframes);
 	monotonic_cnt = now;
-	DEBUG_TRACE (DEBUG::LTC, string_compose ("speed_and_position - TID:%1 | latency: %2 | skip %3\n", pthread_name(), ltc_slave_latency.max, skip));
+	DEBUG_TRACE (DEBUG::LTC, string_compose ("speed_and_position - TID:%1 | latency: %2 | skip %3 | session ? %4| last %5 | dir %6 | sp %7\n",
+	                                         pthread_name(), ltc_slave_latency.max, skip, (_session ? 'y' : 'n'), last_timestamp, transport_direction, ltc_speed));
 
 	if (last_timestamp == 0) {
 		if (delayedlocked < 10) ++delayedlocked;
@@ -582,8 +583,8 @@ LTC_TransportMaster::pre_process (pframes_t nframes)
 	_position = last_ltc_sample + rint(elapsed);
 	current_delta = (_position - sess_pos);
 
-	if (((_position < 0) || (labs(current_delta) > 2 * ENGINE->sample_rate()))) {
-		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC large drift: %1\n", current_delta));
+	if (_position < 0) {
+		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC went negative: %1 + %2 .. reset\n", last_ltc_sample, rint (elapsed)));
 		reset();
 		_speed = 0;
 		return;

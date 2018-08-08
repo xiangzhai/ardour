@@ -97,7 +97,7 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 {
 	Glib::Threads::RWLock::ReaderLock lm (lock, Glib::Threads::TRY_LOCK);
 
-	if (lm.locked()) {
+	if (!lm.locked()) {
 		return 0.0;
 	}
 
@@ -105,8 +105,13 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 		(*tm)->pre_process (nframes);
 	}
 
-	if (!_session || _current_master) {
+	if (!_session) {
 		return 1.0;
+	}
+
+	if (!_session->config.get_external_sync()) {
+		DEBUG_TRACE (DEBUG::Slave, string_compose ("no external sync, use session actual speed of %1\n", _session->actual_speed()));
+		return _session->actual_speed ();
 	}
 
 	double engine_speed = compute_matching_master_speed (nframes, _session->transport_sample());
