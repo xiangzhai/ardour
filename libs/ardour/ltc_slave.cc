@@ -374,17 +374,23 @@ LTC_TransportMaster::process_ltc(samplepos_t const now)
 			fps_detected=true;
 		}
 
-		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC@%ld %02d:%02d:%02d%c%02d | %8lld %8lld%s\n",
-		                                         now,
-		                                         stime.hours,
-		                                         stime.mins,
-		                                         stime.secs,
-		                                         (sample.ltc.dfbit) ? '.' : ':',
-		                                         stime.frame,
-		                                         sample.off_start,
-		                                         sample.off_end,
-		                                         sample.reverse ? " R" : "  "
-			             ));
+#ifndef NDEBUG
+		if (DEBUG_ENABLED (DEBUG::LTC)) {
+			/* use fprintf for simpler correct formatting of times
+			 */
+			fprintf (stderr, "LTC@%ld %02d:%02d:%02d%c%02d | %8lld %8lld%s\n",
+			         now,
+			         stime.hours,
+			         stime.mins,
+			         stime.secs,
+			         (sample.ltc.dfbit) ? '.' : ':',
+			         stime.frame,
+			         sample.off_start,
+			         sample.off_end,
+			         sample.reverse ? " R" : "  "
+				);
+		}
+#endif
 
 		/* when a full LTC sample is decoded, the timecode the LTC sample
 		 * is referring has just passed.
