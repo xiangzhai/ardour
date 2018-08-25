@@ -354,6 +354,8 @@ TransportMasterManager::set_current_locked (boost::shared_ptr<TransportMaster> c
 
 	master_dll_initstate = 0;
 
+	DEBUG_TRACE (DEBUG::Slave, string_compose ("current transport master set to %1\n", c->name()));
+
 	return 0;
 }
 
@@ -448,4 +450,18 @@ TransportMasterManager::get_state ()
 	}
 
 	return *node;
+}
+
+boost::shared_ptr<TransportMaster>
+TransportMasterManager::master_by_type (SyncSource src) const
+{
+	Glib::Threads::RWLock::ReaderLock lm (lock);
+
+	for (TransportMasters::const_iterator tm = _transport_masters.begin(); tm != _transport_masters.end(); ++tm) {
+		if ((*tm)->type() == src) {
+			return *tm;
+		}
+	}
+
+	return boost::shared_ptr<TransportMaster> ();
 }

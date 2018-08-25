@@ -860,6 +860,10 @@ Session::process_event (SessionEvent* ev)
 		set_transport_speed (ev->speed, ev->target_sample, ev->yes_or_no, ev->second_yes_or_no, ev->third_yes_or_no);
 		break;
 
+	case SessionEvent::SetTransportMaster:
+		TransportMasterManager::instance().set_current (ev->transport_master);
+		break;
+
 	case SessionEvent::PunchIn:
 		// cerr << "PunchIN at " << transport_sample() << endl;
 		if (config.get_punch_in() && record_status() == Enabled) {

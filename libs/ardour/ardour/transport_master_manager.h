@@ -63,13 +63,16 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
 
 	bool master_invalid_this_cycle() const { return _master_invalid_this_cycle; }
 
+	boost::shared_ptr<TransportMaster> master_by_type (SyncSource src) const;
+	boost::shared_ptr<TransportMaster> master_by_name (std::string const &) const;
+
 	static const std::string state_node_name;
 
   private:
 	TransportMasterManager();
 
 	TransportMasters      _transport_masters;
-	Glib::Threads::RWLock  lock;
+	mutable Glib::Threads::RWLock  lock;
 	double                _master_speed;
 	samplepos_t           _master_position;
 	boost::shared_ptr<TransportMaster>    _current_master;

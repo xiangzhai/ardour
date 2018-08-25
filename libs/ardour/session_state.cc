@@ -4099,13 +4099,7 @@ Session::config_changed (std::string p, bool ours)
 		first_file_data_format_reset = false;
 
 	} else if (p == "external-sync") {
-		boost::shared_ptr<RouteList> rl = routes.reader();
-		for (RouteList::iterator i = rl->begin(); i != rl->end(); ++i) {
-			boost::shared_ptr<Track> tr = boost::dynamic_pointer_cast<Track> (*i);
-			if (tr && !tr->is_private_route()) {
-				tr->set_slaved (config.get_external_sync());
-			}
-		}
+		request_sync_source (TransportMasterManager::instance().master_by_type (Config->get_sync_source()));
 	}  else if (p == "denormal-model") {
 		setup_fpu ();
 	} else if (p == "history-depth") {

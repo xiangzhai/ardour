@@ -93,6 +93,15 @@ Session::should_ignore_transport_request (TransportRequestSource src) const
 }
 
 void
+Session::request_sync_source (boost::shared_ptr<TransportMaster> tm)
+{
+	SessionEvent* ev = new SessionEvent (SessionEvent::SetTransportMaster, SessionEvent::Add, SessionEvent::Immediate, 0, 0.0);
+	ev->transport_master = tm;
+	DEBUG_TRACE (DEBUG::Slave, "sent request for new transport master\n");
+	queue_event (ev);
+}
+
+void
 Session::request_transport_speed (double speed, bool as_default, TransportRequestSource origin)
 {
 	if (should_ignore_transport_request (origin)) {
