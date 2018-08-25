@@ -49,6 +49,10 @@ using namespace PBD;
 MIDIClock_TransportMaster::MIDIClock_TransportMaster (std::string const & name, int ppqn)
 	: TransportMaster (MIDIClock, name)
 	, ppqn (ppqn)
+	, last_timestamp (0)
+	, should_be_position (0)
+	, midi_clock_count (0)
+	, _speed (0)
 	, _running (false)
 {
 	if ((_port = create_midi_port (string_compose ("%1 in", name))) == 0) {
@@ -106,10 +110,11 @@ MIDIClock_TransportMaster::pre_process (pframes_t nframes, samplepos_t now)
 
 	update_from_midi (nframes, now);
 
-	/* no timecode for 1/4 second ? conclude that its stopped */
-	if (last_timestamp &&
-	    now > last_timestamp &&
-	    now - last_timestamp > ENGINE->sample_rate() / 4) {
+	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("preprocess with lt = %1 @ %2\n", last_timestamp, now));
+
+	/* no timecode ever, or no timecode for 1/4 second ? conclude that its stopped */
+
+	if (!last_timestamp || (now > last_timestamp && now - last_timestamp > ENGINE->sample_rate() / 4)) {
 		_speed = 0;
 		DEBUG_TRACE (DEBUG::MidiClock, "No MIDI Clock messages received for some time, stopping!\n");
 		return;
