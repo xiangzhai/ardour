@@ -93,7 +93,7 @@ Session::ltc_tx_initialize()
 void
 Session::ltc_tx_cleanup()
 {
-	DEBUG_TRACE (DEBUG::LTC, "LTC TX cleanup\n");
+	DEBUG_TRACE (DEBUG::LTCTX, "cleanup\n");
 	ltc_tx_connections.drop_connections ();
 	free(ltc_enc_buf);
 	ltc_enc_buf = NULL;
@@ -104,7 +104,7 @@ Session::ltc_tx_cleanup()
 void
 Session::ltc_tx_resync_latency()
 {
-	DEBUG_TRACE (DEBUG::LTC, "LTC TX resync latency\n");
+	DEBUG_TRACE (DEBUG::LTCTX, "resync latency\n");
 	if (!deletion_in_progress()) {
 		boost::shared_ptr<Port> ltcport = ltc_output_port();
 		if (ltcport) {
@@ -116,7 +116,7 @@ Session::ltc_tx_resync_latency()
 void
 Session::ltc_tx_reset()
 {
-	DEBUG_TRACE (DEBUG::LTC, "LTC TX reset\n");
+	DEBUG_TRACE (DEBUG::LTCTX, "reset\n");
 	assert (ltc_encoder);
 	ltc_enc_pos = -9999; // force re-start
 	ltc_buf_len = 0;
@@ -295,7 +295,7 @@ Session::ltc_tx_send_time_code_for_cycle (samplepos_t start_sample, samplepos_t 
 	}
 
 	if (SIGNUM(new_ltc_speed) != SIGNUM (ltc_speed)) {
-		DEBUG_TRACE (DEBUG::LTC, "LTC TX2: transport changed direction\n");
+		DEBUG_TRACE (DEBUG::LTCTX, "transport changed direction\n");
 		ltc_tx_reset();
 	}
 
@@ -321,7 +321,7 @@ Session::ltc_tx_send_time_code_for_cycle (samplepos_t start_sample, samplepos_t 
 	}
 
 	if (end_sample == start_sample || fabs(current_speed) < 0.1 ) {
-		DEBUG_TRACE (DEBUG::LTC, "LTC TX2: transport is not rolling or absolute-speed < 0.1\n");
+		DEBUG_TRACE (DEBUG::LTCTX, "transport is not rolling or absolute-speed < 0.1\n");
 		/* keep repeating current sample
 		 *
 		 * an LTC generator must be able to continue generating LTC when Ardours transport is in stop
@@ -342,13 +342,13 @@ Session::ltc_tx_send_time_code_for_cycle (samplepos_t start_sample, samplepos_t 
 	}
 
 	if (fabs(new_ltc_speed) > 10.0) {
-		DEBUG_TRACE (DEBUG::LTC, "LTC TX2: speed is out of bounds.\n");
+		DEBUG_TRACE (DEBUG::LTCTX, "speed is out of bounds.\n");
 		ltc_tx_reset();
 		return;
 	}
 
 	if (ltc_speed == 0 && new_ltc_speed != 0) {
-		DEBUG_TRACE (DEBUG::LTC, "LTC TX2: transport started rolling - reset\n");
+		DEBUG_TRACE (DEBUG::LTCTX, "transport started rolling - reset\n");
 		ltc_tx_reset();
 	}
 
@@ -381,7 +381,7 @@ Session::ltc_tx_send_time_code_for_cycle (samplepos_t start_sample, samplepos_t 
 		double bufrspdiff = rint(newbuflen - oldbuflen);
 
 		if (abs(bufrspdiff) > newbuflen || abs(bufrspdiff) > oldbuflen) {
-			DEBUG_TRACE (DEBUG::LTC, "LTC TX2: resampling buffer would destroy information.\n");
+			DEBUG_TRACE (DEBUG::LTCTX, "resampling buffer would destroy information.\n");
 			ltc_tx_reset();
 			poff = 0;
 		} else if (bufrspdiff != 0 && newbuflen > oldbuflen) {
