@@ -174,7 +174,7 @@ MidiPort::get_midi_buffer (pframes_t nframes)
 }
 
 void
-MidiPort::read_and_parse_entire_midi_buffer_with_no_speed_adjustment (pframes_t nframes, MIDI::Parser& parser)
+MidiPort::read_and_parse_entire_midi_buffer_with_no_speed_adjustment (pframes_t nframes, MIDI::Parser& parser, samplepos_t now)
 {
 	void* buffer = port_engine.get_buffer (_port_handle, nframes);
 	const pframes_t event_count = port_engine.get_midi_event_count (buffer);
@@ -191,6 +191,8 @@ MidiPort::read_and_parse_entire_midi_buffer_with_no_speed_adjustment (pframes_t 
 			/* throw away active sensing */
 			continue;
 		}
+
+		parser.set_timestamp (now + timestamp);
 
 		/* During this parsing stage, signals will be emitted from the
 		 * Parser, which will update anything connected to it.

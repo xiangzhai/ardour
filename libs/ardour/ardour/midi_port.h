@@ -65,7 +65,7 @@ class LIBARDOUR_API MidiPort : public Port {
 	int add_shadow_port (std::string const &, MidiFilter);
 	boost::shared_ptr<MidiPort> shadow_port() const { return _shadow_port; }
 
-	void read_and_parse_entire_midi_buffer_with_no_speed_adjustment (pframes_t nframes, MIDI::Parser& parser);
+	void read_and_parse_entire_midi_buffer_with_no_speed_adjustment (pframes_t nframes, MIDI::Parser& parser, samplepos_t now);
 
   protected:
 	friend class PortManager;

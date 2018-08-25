@@ -90,6 +90,8 @@ AudioPort::cycle_end (pframes_t nframes)
 
 	if (sends_output() && _port_handle) {
 
+#warning ::externally_connected() for JACK takes a lock per port / optimize-me
+
 		if (!externally_connected ()) {
 			/* ardour internal port, data goes nowhere, skip resampling */
 			// TODO reset resampler only once

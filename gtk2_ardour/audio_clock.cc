@@ -952,7 +952,7 @@ AudioClock::set_slave_info ()
 		case MIDIClock:
 			if (tm) {
 				_left_btn.set_text (sync_source_to_string (tm->type(), true), true);
-				_right_btn.set_text (tm->approximate_current_delta (), true);
+				_right_btn.set_text (tm->delta_string (), true);
 			} else {
 				_left_btn.set_text (_("--pending--"), true);
 				_right_btn.set_text ("", true);
@@ -967,10 +967,10 @@ AudioClock::set_slave_info ()
 					matching = (tcmaster->apparent_timecode_format() == _session->config.get_timecode_format());
 					_left_btn.set_text (string_compose ("%1<span face=\"monospace\" foreground=\"%3\">%2</span>",
 					                                    sync_source_to_string(tm->type(), true)[0],
-					                                    tcmaster->approximate_current_position (),
+					                                    tcmaster->position_string (),
 					                                    matching ? "#66ff66" : "#ff3333"
 								), true);
-					_right_btn.set_text (tm->approximate_current_delta (), true);
+					_right_btn.set_text (tm->delta_string (), true);
 				}
 			} else {
 				_left_btn.set_text (_("--pending--"), true);

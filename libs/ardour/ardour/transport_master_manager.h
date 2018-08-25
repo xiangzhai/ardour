@@ -46,7 +46,6 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
 	void clear ();
 
 	double pre_process_transport_masters (pframes_t, samplepos_t session_transport_position);
-	void post_process_transport_masters (pframes_t);
 
 	double get_current_speed_in_process_context() const { return _master_speed; }
 	samplepos_t get_current_position_in_process_context() const { return _master_position; }
@@ -76,14 +75,6 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
 	boost::shared_ptr<TransportMaster>    _current_master;
 	Session* _session;
 
-	enum TransportMasterState {
-		Stopped, /* no incoming or invalid signal/data for master to run with */
-		Waiting, /* waiting to get full lock on incoming signal/data */
-		Running  /* lock achieved, master is generating meaningful speed & position */
-	};
-
-	TransportMasterState transport_master_tracking_state;
-	samplepos_t master_wait_end;
 	bool _master_invalid_this_cycle;
 
 	// a DLL to chase the transport master
@@ -91,18 +82,21 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
 	int    transport_dll_initstate;
 	double t0; /// time at the beginning of ???
 	double t1; /// calculated end of the ???
-	double e; /// loop error = real value - expected value
 	double e2; /// second order loop error
 	double bandwidth; /// DLL filter bandwidth
 	double b, c, omega; /// DLL filter coefficients
 
-	void init_transport_master_dll (int direction, samplepos_t pos);
+	void init_transport_master_dll (double speed, samplepos_t pos);
+	int master_dll_initstate;
 
 	static TransportMasterManager* _instance;
 
 	int add_locked (boost::shared_ptr<TransportMaster>);
-	double compute_matching_master_speed (pframes_t nframes, samplepos_t session_transport_position);
+	double compute_matching_master_speed (pframes_t nframes, samplepos_t, bool& locate_required);
 	int set_current_locked (boost::shared_ptr<TransportMaster>);
+
+	PBD::ScopedConnection config_connection;
+	void parameter_changed (std::string const & what);
 };
 
 } // namespace ARDOUR

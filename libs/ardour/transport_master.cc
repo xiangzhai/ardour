@@ -189,7 +189,7 @@ TransportMasterViaMIDI::create_midi_port (std::string const & port_name)
 }
 
 void
-TransportMasterViaMIDI::update_from_midi (pframes_t nframes)
+TransportMasterViaMIDI::update_from_midi (pframes_t nframes, samplepos_t now)
 {
-	_midi_port->read_and_parse_entire_midi_buffer_with_no_speed_adjustment (nframes, parser);
+	_midi_port->read_and_parse_entire_midi_buffer_with_no_speed_adjustment (nframes, parser, now);
 }

@@ -38,7 +38,7 @@
 #include "midi++/types.h"
 
 
-/* used for approximate_current_delta(): */
+/* used for delta_string(): */
 #define PLUSMINUS(A) ( ((A)<0) ? "-" : (((A)>0) ? "+" : "\u00B1") )
 #define LEADINGZERO(A) ( (A)<10 ? "   " : (A)<100 ? "  " : (A)<1000 ? " " : "" )
 
@@ -71,8 +71,7 @@ class LIBARDOUR_API TransportMaster {
 	static boost::shared_ptr<TransportMaster> factory (SyncSource, std::string const &);
 	static boost::shared_ptr<TransportMaster> factory (XMLNode const &);
 
-	virtual void pre_process (pframes_t nframes) = 0;
-	virtual void post_process (pframes_t nframes) {}
+	virtual void pre_process (pframes_t nframes, samplepos_t now) = 0;
 
 	/**
 	 * This is the most important function to implement:
@@ -126,7 +125,7 @@ class LIBARDOUR_API TransportMaster {
 	 * @param position - The transport position requested
 	 * @return - The return value is currently ignored (see Session::follow_slave)
 	 */
-	virtual bool speed_and_position (double& speed, samplepos_t& position) = 0;
+	virtual bool speed_and_position (double& speed, samplepos_t& position, samplepos_t now) = 0;
 
 	/**
 	 * reports to ARDOUR whether the TransportMaster is currently synced to its external
@@ -180,7 +179,7 @@ class LIBARDOUR_API TransportMaster {
 	/**
 	 * @return - current time-delta between engine and sync-source
 	 */
-	virtual std::string approximate_current_delta() const { return ""; }
+	virtual std::string delta_string() const { return ""; }
 
 	virtual bool can_loop() const { return false; }
 
@@ -266,7 +265,7 @@ class LIBARDOUR_API TransportMasterViaMIDI {
 	MIDI::Parser                 parser;
 	boost::shared_ptr<MidiPort> _midi_port;
 
-	void update_from_midi (pframes_t nframes);
+	void update_from_midi (pframes_t nframes, samplepos_t now);
 };
 
 class LIBARDOUR_API TimecodeTransportMaster : public TransportMaster {
@@ -280,7 +279,7 @@ class LIBARDOUR_API TimecodeTransportMaster : public TransportMaster {
 	   should NOT do any computation, but should use a cached value
 	   of the TC source position.
 	*/
-	virtual std::string approximate_current_position() const = 0;
+	virtual std::string position_string() const = 0;
 
 	samplepos_t        timecode_offset;
 	bool              timecode_negative_offset;
@@ -295,9 +294,9 @@ class LIBARDOUR_API MTC_TransportMaster : public TimecodeTransportMaster, public
 
 	void set_session (Session*);
 
-	void pre_process (pframes_t nframes);
+	void pre_process (pframes_t nframes, samplepos_t now);
 
-	bool speed_and_position (double&, samplepos_t&);
+	bool speed_and_position (double&, samplepos_t&, samplepos_t);
 
 	bool locked() const;
 	bool ok() const;
@@ -308,8 +307,8 @@ class LIBARDOUR_API MTC_TransportMaster : public TimecodeTransportMaster, public
 	samplecnt_t seekahead_distance() const;
 
         Timecode::TimecodeFormat apparent_timecode_format() const;
-        std::string approximate_current_position() const;
-	std::string approximate_current_delta() const;
+        std::string position_string() const;
+	std::string delta_string() const;
 
   private:
 	PBD::ScopedConnectionList port_connections;
@@ -341,7 +340,6 @@ class LIBARDOUR_API MTC_TransportMaster : public TimecodeTransportMaster, public
 	Timecode::TimecodeFormat a3e_timecode;
 	Timecode::Time timecode;
 	bool           printed_timecode_warning;
-	sampleoffset_t  current_delta;
 
 	void reset (bool with_pos);
 	void queue_reset (bool with_pos);
@@ -365,8 +363,8 @@ public:
 
 	void set_session (Session*);
 
-	void pre_process (pframes_t nframes);
-	bool speed_and_position (double&, samplepos_t&);
+	void pre_process (pframes_t nframes, samplepos_t now);
+	bool speed_and_position (double&, samplepos_t&, samplepos_t);
 
 	bool locked() const;
 	bool ok() const;
@@ -376,13 +374,13 @@ public:
 	samplecnt_t seekahead_distance () const { return 0; }
 
 	Timecode::TimecodeFormat apparent_timecode_format() const;
-	std::string approximate_current_position() const;
-	std::string approximate_current_delta() const;
+	std::string position_string() const;
+	std::string delta_string() const;
 
   private:
 	void parse_ltc(const pframes_t, const Sample* const, const samplecnt_t);
 	void process_ltc(samplepos_t const);
-	void init_engine_dll (samplepos_t, int32_t);
+	void init_dll (samplepos_t, int32_t);
 	bool detect_discontinuity(LTCFrameExt *, int, bool);
 	bool detect_ltc_fps(int, bool);
 	bool equal_ltc_sample_time(LTCFrame *a, LTCFrame *b);
@@ -404,7 +402,7 @@ public:
 	samplecnt_t     monotonic_cnt;
 	samplecnt_t     last_timestamp;
 	samplecnt_t     last_ltc_sample;
-	double         ltc_speed;
+	double          ltc_speed;
 	sampleoffset_t  current_delta;
 	int            delayedlocked;
 
@@ -414,13 +412,11 @@ public:
 	bool           sync_lock_broken;
 	Timecode::TimecodeFormat ltc_timecode;
 	Timecode::TimecodeFormat a3e_timecode;
+	double         samples_per_timecode_frame;
 
 	PBD::ScopedConnectionList port_connections;
 	PBD::ScopedConnection     config_connection;
         LatencyRange  ltc_slave_latency;
-
-        double _speed;
-        samplepos_t _position;
 };
 
 class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public TransportMasterViaMIDI {
@@ -432,10 +428,10 @@ class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public T
 
 	void set_session (Session*);
 
-	void pre_process (pframes_t nframes);
+	void pre_process (pframes_t nframes, samplepos_t now);
 
 	void rebind (MidiPort&);
-	bool speed_and_position (double&, samplepos_t&);
+	bool speed_and_position (double&, samplepos_t&, samplepos_t);
 
 	bool locked() const;
 	bool ok() const;
@@ -444,7 +440,7 @@ class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public T
 	samplecnt_t resolution () const;
 	bool requires_seekahead () const { return false; }
 
-	std::string approximate_current_delta() const;
+	std::string delta_string() const;
 
   protected:
 	PBD::ScopedConnectionList port_connections;
@@ -491,8 +487,8 @@ class LIBARDOUR_API Engine_TransportMaster : public TransportMaster
 	Engine_TransportMaster (AudioEngine&);
 	~Engine_TransportMaster  ();
 
-	void pre_process (pframes_t);
-	bool speed_and_position (double& speed, samplepos_t& pos);
+	void pre_process (pframes_t nframes, samplepos_t now);
+	bool speed_and_position (double& speed, samplepos_t& pos, samplepos_t);
 
 	bool starting() const { return _starting; }
 	bool locked() const;

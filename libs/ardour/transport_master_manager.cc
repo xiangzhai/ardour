@@ -24,6 +24,12 @@
 #include "ardour/session.h"
 #include "ardour/transport_master_manager.h"
 
+#if __cplusplus > 199711L
+#define local_signbit(x) std::signbit (x)
+#else
+#define local_signbit(x) ((((__int64*)(&z))*) & 0x8000000000000000)
+#endif
+
 using namespace ARDOUR;
 using namespace PBD;
 
@@ -35,9 +41,8 @@ TransportMasterManager::TransportMasterManager()
 	, _master_position (0)
 	, _current_master (0)
 	, _session (0)
-	, transport_master_tracking_state (Stopped)
-	, master_wait_end (0)
 	, _master_invalid_this_cycle (false)
+	, master_dll_initstate (0)
 {
 }
 
@@ -69,14 +74,35 @@ TransportMasterManager::init ()
 void
 TransportMasterManager::set_session (Session* s)
 {
-	/* Called by AudioEngine in process context */
+	/* Called by AudioEngine in process context, synchronously with it's
+	 * own "adoption" of the Session. The call will occur before the first
+	 * call to ::pre_process_transport_masters().
+	 */
 
 	Glib::Threads::RWLock::ReaderLock lm (lock);
+
+	config_connection.disconnect ();
 
 	_session = s;
 
 	for (TransportMasters::iterator tm = _transport_masters.begin(); tm != _transport_masters.end(); ++tm) {
 		(*tm)->set_session (s);
+	}
+
+	if (_session) {
+		_session->config.ParameterChanged.connect_same_thread (config_connection, boost::bind (&TransportMasterManager::parameter_changed, this, _1));
+	}
+
+}
+
+void
+TransportMasterManager::parameter_changed (std::string const & what)
+{
+	if (what == "external-sync") {
+		if (!_session->config.get_external_sync()) {
+			/* disabled */
+			DiskReader::set_no_disk_output (false);
+		}
 	}
 }
 
@@ -93,207 +119,154 @@ TransportMasterManager::instance()
 // and this method computes the transport speed that Ardour should use to get into and remain in sync with the master.
 //
 double
-TransportMasterManager::pre_process_transport_masters (pframes_t nframes, samplepos_t session_transport_position)
+TransportMasterManager::pre_process_transport_masters (pframes_t nframes, samplepos_t now)
 {
 	Glib::Threads::RWLock::ReaderLock lm (lock, Glib::Threads::TRY_LOCK);
 
 	if (!lm.locked()) {
-		return 0.0;
+		return 1.0;
 	}
 
-	for (TransportMasters::iterator tm = _transport_masters.begin(); tm != _transport_masters.end(); ++tm) {
-		(*tm)->pre_process (nframes);
+	if (Config->get_run_all_transport_masters_always()) {
+		for (TransportMasters::iterator tm = _transport_masters.begin(); tm != _transport_masters.end(); ++tm) {
+			(*tm)->pre_process (nframes, now);
+		}
 	}
 
 	if (!_session) {
 		return 1.0;
 	}
 
+	/* if we're not running ALL transport masters, but still have a current
+	 * one, then we should run that one all the time so that we know
+	 * precisely where it is when we starting chasing it ...
+	 */
+
+
+	if (!Config->get_run_all_transport_masters_always() && _current_master) {
+		_current_master->pre_process (nframes, now);
+	}
+
 	if (!_session->config.get_external_sync()) {
-		DEBUG_TRACE (DEBUG::Slave, string_compose ("no external sync, use session actual speed of %1\n", _session->actual_speed()));
-		return _session->actual_speed ();
+		DEBUG_TRACE (DEBUG::Slave, string_compose ("no external sync, use session actual speed of %1\n", _session->actual_speed() ? _session->actual_speed() : 1.0));
+		return _session->actual_speed () ? _session->actual_speed() : 1.0;
 	}
 
-	double engine_speed = compute_matching_master_speed (nframes, _session->transport_sample());
-	double session_speed;
-
-	if (engine_speed < 0.0) {
-		session_speed = -1.0;
-	} else if (engine_speed > 0.0) {
-		session_speed = 1.0;
-	} else {
-		session_speed = 0.0;
-	}
-
-	/* We have the following goals here:
-
-	   - check transport master state, and use no_roll() if the master is in a state that cannot be used.
-	   - notice if the master changed direction, and respond appropriately if it has
-	   - decide whether or not to silence disk output if we're not close enough to the transport master position
-
-	   If we return true, normally processing will continue. If we return false, the calling process function will
-	   return prematurely. We must therefore ensure we have done all necessary things before returning false.
-	*/
+	/* --- NOT REACHED UNLESS CHASING (i.e. _session->config.get_external_sync() is true ------*/
 
 	if (!_current_master->ok()) {
+		/* stop */
 		_session->request_transport_speed (0.0, false, _current_master->request_type());
-		DEBUG_TRACE (DEBUG::Slave, "no roll2\n");
+		DEBUG_TRACE (DEBUG::Slave, "no roll2 - master has failed\n");
 		_master_invalid_this_cycle = true;
 		return 1.0;
 	}
-
-	double master_speed;
-	samplepos_t master_position;
-
-	if (_current_master->speed_and_position (master_speed, master_position)) {
-		_master_invalid_this_cycle = true;
-	}
-
-	const double delta = master_position - _session->transport_sample();
-
-	DEBUG_TRACE (DEBUG::Slave, string_compose ("Slave position %1 speed %2\n", master_position, master_speed));
 
 	if (!_current_master->locked()) {
-		DEBUG_TRACE (DEBUG::Slave, "no roll2\n");
+		DEBUG_TRACE (DEBUG::Slave, "no roll4 - not locked\n");
 		_master_invalid_this_cycle = true;
 		return 1.0;
 	}
 
-	if (master_speed != 0.0f) {
+	double engine_speed;
 
-		/* transport master is moving */
-
-		switch (transport_master_tracking_state) {
-		case Stopped:
-
-			/* it was stopped, and has now restarted. get its position, check if we can already play audio for the right spot,
-			   and locate if needed.
-			*/
-
-			if (_current_master->requires_seekahead()) {
-				master_wait_end = master_position + _current_master->seekahead_distance ();
-				_session->request_locate (master_wait_end, false, _current_master->request_type());
-				transport_master_tracking_state = Waiting;
-			} else {
-				_session->request_locate (master_position, false, _current_master->request_type());
-				transport_master_tracking_state = Running;
-			}
-			break;
-
-		case Waiting:
-			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave waiting at %1\n", master_position));
-
-			if (master_position >= master_wait_end) {
-
-				DEBUG_TRACE (DEBUG::Slave, string_compose ("slave start at %1 vs %2\n", master_position, _session->transport_sample()));
-
-				_session->request_locate (master_position, false, _current_master->request_type());
-				transport_master_tracking_state = Running;
-			}
-			break;
-
-#if __cplusplus > 199711L
-#define local_signbit(x) std::signbit (x)
-#else
-#define local_signbit(x) ((((__int64*)(&z))*) & 0x8000000000000000)
-#endif
-
-		case Running:
-			if (!_session->transport_rolling()) {
-				DEBUG_TRACE (DEBUG::Slave, "slave starts transport\n");
-				_session->request_transport_speed (session_speed, false, _current_master->request_type());
-			} else if (local_signbit (master_speed) != local_signbit (_session->transport_speed())) {
-				/* master changed direction, so reset speed */
-				_session->request_transport_speed (session_speed, false, _current_master->request_type());
-			}
-			break;
-		}
-
-	} else { // slave_speed is 0
-
-		/* slave has stopped */
-
-		if (_session->transport_rolling()) {
-			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stops transport: %1 sample %2 tf %3\n", master_speed, master_position, _session->transport_sample()));
-			_session->request_transport_speed (0.0, false, _current_master->request_type());
-		}
-
-		if (master_position != _session->transport_sample()) {
-			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stopped, move to %1\n", master_position));
-			_session->request_locate (master_position, false, _current_master->request_type());
-		}
-
-		transport_master_tracking_state = Stopped;
+	if (!_current_master->speed_and_position (_master_speed, _master_position, now)) {
+		return 1.0;
 	}
 
-	if (!_session->actively_recording() && delta > _current_master->resolution()) {
-		DEBUG_TRACE (DEBUG::Slave, string_compose ("slave delta %1 greater than slave resolution %2 => no disk output\n", delta, _current_master->resolution()));
-		/* run routes as normal, but no disk output */
-		DiskReader::set_no_disk_output (true);
+	if (_master_speed != 0.0) {
+
+		samplepos_t delta = _master_position;
+
+		if (_session->compute_audible_delta (delta)) {
+
+			if (master_dll_initstate == 0) {
+
+				init_transport_master_dll (_master_speed, _master_position);
+				// _master_invalid_this_cycle = true;
+				DEBUG_TRACE (DEBUG::Slave, "no roll3 - still initializing master DLL\n");
+				master_dll_initstate = _master_speed > 0.0 ? 1 : -1;
+
+				return 1.0;
+			}
+
+			/* compute delta or "error" between the computed master_position for
+			 * this cycle and the current session position.
+			 *
+			 * Remember: ::speed_and_position() is being called in process context
+			 * but returns the predicted speed+position for the start of this process cycle,
+			 * not just the most recent timestamp received by the current master object.
+			 */
+
+			DEBUG_TRACE (DEBUG::Slave, string_compose ("master DLL: delta = %1 (%2 vs %3) res: %4\n", delta, _master_position, _session->transport_sample(), _current_master->resolution()));
+
+			if (delta > _current_master->resolution()) {
+
+				// init_transport_master_dll (_master_speed, _master_position);
+
+				if (!_session->actively_recording()) {
+					DEBUG_TRACE (DEBUG::Slave, string_compose ("slave delta %1 greater than slave resolution %2 => no disk output\n", delta, _current_master->resolution()));
+					/* run routes as normal, but no disk output */
+					DiskReader::set_no_disk_output (true);
+				} else {
+					DiskReader::set_no_disk_output (false);
+				}
+			} else {
+				DiskReader::set_no_disk_output (false);
+			}
+
+			/* inject DLL with new data */
+
+			DEBUG_TRACE (DEBUG::Slave, string_compose ("feed master DLL t0 %1 t1 %2 e %3 %4 e2 %5 sess %6\n", t0, t1, delta, _master_position, e2, _session->transport_sample()));
+
+			const double e = delta;
+
+			t0 = t1;
+			t1 += b * e + e2;
+			e2 += c * e;
+
+			engine_speed = (t1 - t0) / nframes;
+
+			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave @ %1 speed %2 cur delta %3 matching speed %4\n", _master_position, _master_speed, delta, engine_speed));
+
+			if (_current_master->sample_clock_synced() && engine_speed != 0.0f) {
+
+				/* if the master is synced to our audio interface via word-clock or similar, then we assume that its speed is binary: 0.0 or 1.0
+				   (since our sample clock cannot change with respect to it).
+				*/
+				if (engine_speed > 0.0) {
+					engine_speed = 1.0;
+				} else if (engine_speed < 0.0) {
+					engine_speed = -1.0;
+				}
+			}
+
+			/* speed is set, we're locked, and good to go */
+			DEBUG_TRACE (DEBUG::Slave, string_compose ("%1: computed speed-to-follow-master as %2\n", _current_master->name(), engine_speed));
+
+		} else {
+
+			/* session has not finished with latency compensation yet, so we cannot compute the
+			   difference between the master and the session.
+			*/
+			engine_speed = 1.0;
+		}
+
+	} else {
+
+		engine_speed = 1.0;
 	}
 
 	_master_invalid_this_cycle = false;
+
+	DEBUG_TRACE (DEBUG::Slave, string_compose ("computed resampling ratio as %1\n", engine_speed));
+	engine_speed  = 0.98;
 	return engine_speed;
 }
 
-double
-TransportMasterManager::compute_matching_master_speed (pframes_t nframes, samplepos_t session_transport_position)
-{
-	assert (_current_master);
-
-	if (!_current_master->speed_and_position (_master_speed, _master_position)) {
-		return 1.0;
-	}
-
-	/* compute delta or "error" between session and the master's
-	 * position. Note: master_position is computed for right now, whereas
-	 * _transport_sample was updated during the last process cycle. They
-	 * should both indicate the same time. Any discrepancy is fed back into
-	 * the DLL so that we get/remain more accurate.
-	 */
-
-	const double e = _master_position - session_transport_position;
-
-	/* inject DLL with new data */
-
-	t0 = t1;
-	t1 += b * e + e2;
-	e2 += c * e;
-
-	double matching_master_speed = (t0 - t1) / nframes;
-
-	DEBUG_TRACE (DEBUG::Slave, string_compose ("slave @ %1 speed %2 cur delta %3 matching speed %4n", _master_position, _master_speed, e, matching_master_speed));
-
-	if (_current_master->sample_clock_synced() && matching_master_speed != 0.0f) {
-
-		/* if the master is synced to our audio interface via word-clock or similar, then we assume that its speed is binary: 0.0 or 1.0
-		   (since our sample clock cannot change with respect to it).
-		*/
-		matching_master_speed = matching_master_speed > 0.0 ? 1.0 : -1.0f;
-	} else if (e > _current_master->resolution()) {
-		/* session will not play disk material, so do not varispeed yet */
-		matching_master_speed = matching_master_speed > 0.0 ? 1.0 : -1.0f;
-	}
-
-	/* speed is set, we're locked, and good to go */
-	DEBUG_TRACE (DEBUG::Slave, string_compose ("%1: computed speed-to-follow-master as %2\n", _current_master->name(), matching_master_speed));
-	return matching_master_speed;
-}
 
 void
-TransportMasterManager::post_process_transport_masters (pframes_t nframes)
-{
-	Glib::Threads::RWLock::ReaderLock lm (lock, Glib::Threads::TRY_LOCK);
-
-	if (lm.locked()) {
-		for (TransportMasters::iterator tm = _transport_masters.begin(); tm != _transport_masters.end(); ++tm) {
-			(*tm)->post_process (nframes);
-		}
-	}
-}
-
-void
-TransportMasterManager::init_transport_master_dll (int direction, samplepos_t pos)
+TransportMasterManager::init_transport_master_dll (double speed, samplepos_t pos)
 {
 	/* the bandwidth of the DLL is a trade-off,
 	 * because the max-speed of the transport in ardour is
@@ -309,11 +282,15 @@ TransportMasterManager::init_transport_master_dll (int direction, samplepos_t po
 	b = 1.4142135623730950488 * omega;
 	c = omega * omega;
 
-	e2 = double (direction * ae->sample_rate());
+	const int direction = (speed >= 0.0 ? 1 : -1);
+
+	master_dll_initstate = direction;
+
+	e2 = double (direction * ae->samples_per_cycle());
 	t0 = double (pos);
 	t1 = t0 + e2;
 
-	DEBUG_TRACE (DEBUG::Slave, string_compose ("[re-]init DLL %1 %2 %3\n", t0,  t1, e2));
+	DEBUG_TRACE (DEBUG::Slave, string_compose ("[re-]init ENGINE DLL %1 %2 %3 from %4 %5\n", t0,  t1, e2, speed, pos));
 }
 
 int
@@ -374,7 +351,8 @@ TransportMasterManager::set_current_locked (boost::shared_ptr<TransportMaster> c
 	_current_master = c;
 	_master_speed = 0;
 	_master_position = 0;
-	transport_master_tracking_state = Stopped;
+
+	master_dll_initstate = 0;
 
 	return 0;
 }

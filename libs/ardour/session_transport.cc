@@ -1111,7 +1111,7 @@ Session::start_locate (samplepos_t target_sample, bool with_roll, bool with_flus
 		double sp;
 		samplepos_t pos;
 
-		transport_master()->speed_and_position (sp, pos);
+		transport_master()->speed_and_position (sp, pos, 0);
 
 		if (target_sample != pos) {
 
@@ -1156,6 +1156,8 @@ Session::micro_locate (samplecnt_t distance)
 			return -1;
 		}
 	}
+
+	DEBUG_TRACE (DEBUG::Transport, string_compose ("micro-locate by %1\n", distance));
 
 	for (RouteList::iterator i = rl->begin(); i != rl->end(); ++i) {
 		boost::shared_ptr<Track> tr = boost::dynamic_pointer_cast<Track> (*i);
@@ -2030,9 +2032,4 @@ Session::sync_source_changed (SyncSource type, samplepos_t pos, pframes_t cycle_
 	}
 
 	set_dirty();
-}
-
-void
-Session::reset_slave_state ()
-{
 }

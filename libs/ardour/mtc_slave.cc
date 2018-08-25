@@ -67,7 +67,6 @@ MTC_TransportMaster::MTC_TransportMaster (std::string const & name)
 	, busy_guard1 (0)
 	, busy_guard2 (0)
 	, printed_timecode_warning (false)
-	, current_delta (0)
 {
 	if ((_port = create_midi_port (string_compose ("%1 in", name))) == 0) {
 		throw failed_constructor();
@@ -125,11 +124,11 @@ MTC_TransportMaster::set_session (Session *s)
 }
 
 void
-MTC_TransportMaster::pre_process (pframes_t nframes)
+MTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now)
 {
 	/* Read and parse incoming MIDI */
 
-	update_from_midi (nframes);
+	update_from_midi (nframes, now);
 
 }
 
@@ -229,7 +228,6 @@ MTC_TransportMaster::reset (bool with_position)
 	window_begin = 0;
 	window_end = 0;
 	transport_direction = 1;
-	current_delta = 0;
 	ActiveChanged (false);
 }
 
@@ -280,7 +278,7 @@ MTC_TransportMaster::init_mtc_dll(samplepos_t tme, double qtr)
 
 /* called from MIDI parser */
 void
-MTC_TransportMaster::update_mtc_qtr (Parser& /*p*/, int which_qtr, samplepos_t now)
+MTC_TransportMaster::update_mtc_qtr (Parser& p, int which_qtr, samplepos_t now)
 {
 	busy_guard1++;
 	const double qtr_d = quarter_frame_duration;
@@ -581,22 +579,16 @@ MTC_TransportMaster::reset_window (samplepos_t root)
 /* main entry point from session_process.cc
 xo * in process callback context */
 bool
-MTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos)
+MTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, samplepos_t now)
 {
-	samplepos_t now = _session->engine().sample_time_at_cycle_start();
-	samplepos_t sess_pos = _session->transport_sample(); // corresponds to now
-	//sess_pos -= _session->engine().samples_since_cycle_start();
-
 	SafeTime last;
-	sampleoffset_t elapsed;
 
 	read_current (&last);
 
-	DEBUG_TRACE (DEBUG::MTC, string_compose ("speed&pos: timestamp %1 speed %2 dir %4 tpos %5 now %6 last-in %7\n",
+	DEBUG_TRACE (DEBUG::MTC, string_compose ("speed&pos: timestamp %1 speed %2 dir %4 now %5 last-in %6\n",
 						 last.timestamp,
 						 last.speed,
 						 transport_direction,
-						 sess_pos,
 						 now,
 						 last_inbound_frame));
 
@@ -622,14 +614,7 @@ MTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos)
 
 
 	DEBUG_TRACE (DEBUG::MTC, string_compose ("MTC::speed_and_position mtc-tme: %1 mtc-pos: %2 mtc-spd: %3\n", last.timestamp, last.position, last.speed));
-	DEBUG_TRACE (DEBUG::MTC, string_compose ("MTC::speed_and_position eng-tme: %1 eng-pos: %2\n", now, sess_pos));
 
-	/* interpolate position according to speed and time since last quarter-frame*/
-	if (last.speed == 0.0f) {
-		elapsed = 0;
-	}
-
-	pos = last.position + elapsed;
 	speed = last.speed;
 
 	/* provide a .1% deadzone to lock the speed */
@@ -637,10 +622,11 @@ MTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos)
 		speed = 1.0;
 	}
 
-	DEBUG_TRACE (DEBUG::MTC, string_compose ("MTCsync spd: %1 pos: %2 | last-pos: %3 elapsed: %4 delta: %5\n",
-						 speed, pos, last.position, elapsed,  pos - sess_pos));
+	pos =  last.position;
+	pos += (now - last.timestamp) * speed;
 
-	current_delta = (pos - sess_pos);
+	DEBUG_TRACE (DEBUG::MTC, string_compose ("MTCsync spd: %1 pos: %2 | last-pos: %3 | elapsed: %4\n",
+	                                         speed, pos, last.position, (now - last.timestamp)));
 
 	return true;
 }
@@ -652,7 +638,7 @@ MTC_TransportMaster::apparent_timecode_format () const
 }
 
 std::string
-MTC_TransportMaster::approximate_current_position() const
+MTC_TransportMaster::position_string() const
 {
 	SafeTime last;
 	read_current (&last);
@@ -667,16 +653,19 @@ MTC_TransportMaster::approximate_current_position() const
 }
 
 std::string
-MTC_TransportMaster::approximate_current_delta() const
+MTC_TransportMaster::delta_string () const
 {
 	char delta[80];
 	SafeTime last;
 	read_current (&last);
+
+	delta[0] = '\0';
+
 	if (last.timestamp == 0 || reset_pending) {
 		snprintf(delta, sizeof(delta), "\u2012\u2012\u2012\u2012");
 	} else {
-		snprintf(delta, sizeof(delta), "\u0394<span foreground=\"green\" face=\"monospace\" >%s%s%" PRIi64 "</span>sm",
-				LEADINGZERO(abs(current_delta)), PLUSMINUS(-current_delta), abs(current_delta));
+//		snprintf(delta, sizeof(delta), "\u0394<span foreground=\"green\" face=\"monospace\" >%s%s%" PRIi64 "</span>sm",
+//				LEADINGZERO(abs(current_delta)), PLUSMINUS(-current_delta), abs(current_delta));
 	}
 	return std::string(delta);
 }

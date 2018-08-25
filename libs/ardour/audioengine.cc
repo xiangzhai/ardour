@@ -78,7 +78,7 @@ AudioEngine::AudioEngine ()
 	, _freewheeling (false)
 	, monitor_check_interval (INT32_MAX)
 	, last_monitor_check (0)
-	, _processed_samples (0)
+	, _processed_samples (-1)
 	, m_meter_thread (0)
 	, _main_thread (0)
 	, _mtdm (0)
@@ -198,6 +198,11 @@ AudioEngine::process_callback (pframes_t nframes)
 
 	/// The number of samples that will have been processed when we've finished
 	pframes_t next_processed_samples;
+
+	if (_processed_samples < 0) {
+		_processed_samples = sample_time();
+		cerr << "IIIIINIT PS to " << _processed_samples << endl;
+	}
 
 	/* handle wrap around of total samples counter */
 
@@ -367,9 +372,9 @@ AudioEngine::process_callback (pframes_t nframes)
 	}
 
 	if (!_freewheeling || Freewheel.empty()) {
-		const double engine_speed = tmm.pre_process_transport_masters (nframes, _session->transport_sample());
-		DEBUG_TRACE (DEBUG::Slave, string_compose ("transport master (current=%1) gives speed %2\n", tmm.current()->name(), engine_speed));
+		const double engine_speed = tmm.pre_process_transport_masters (nframes, sample_time_at_cycle_start());
 		Port::set_speed_ratio (engine_speed);
+		DEBUG_TRACE (DEBUG::Slave, string_compose ("transport master (current=%1) gives speed %2 (ports using %3)\n", tmm.current() ? tmm.current()->name() : string("[]"), engine_speed, Port::speed_ratio()));
 	}
 
 	/* tell all relevant objects that we're starting a new cycle */
@@ -389,12 +394,15 @@ AudioEngine::process_callback (pframes_t nframes)
 		Freewheel (nframes);
 	} else {
 		if (Port::cycle_nframes () <= nframes) {
+			cerr << "********** straight process " << Port::cycle_nframes() << " of " << nframes << endl;
 			_session->process (Port::cycle_nframes ());
 		} else {
 			pframes_t remain = Port::cycle_nframes ();
 			while (remain > 0) {
 				pframes_t nf = std::min (remain, nframes);
+				cerr << "********** calling Session::process (" << nf << ")\n";
 				_session->process (nf);
+				cerr << "completed\n";
 				remain -= nf;
 				if (remain > 0) {
 					split_cycle (nf);
@@ -457,10 +465,6 @@ AudioEngine::process_callback (pframes_t nframes)
 		session_removal_gain -= (nframes * session_removal_gain_step);
 	} else {
 		PortManager::cycle_end (nframes, _session);
-	}
-
-	if (!_freewheeling || Freewheel.empty()) {
-		tmm.post_process_transport_masters (nframes);
 	}
 
 	_processed_samples = next_processed_samples;

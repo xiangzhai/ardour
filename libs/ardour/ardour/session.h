@@ -684,6 +684,7 @@ public:
 	samplepos_t requested_return_sample() const { return _requested_return_sample; }
 	void set_requested_return_sample(samplepos_t return_to);
 
+	bool compute_audible_delta (samplepos_t& pos_and_delta) const;
 	samplecnt_t remaining_latency_preroll () const { return _remaining_latency_preroll; }
 
 	enum PullupFormat {
@@ -1300,6 +1301,17 @@ private:
 	static const samplecnt_t bounce_chunk_size;
 
 	/* Transport master DLL */
+
+	enum TransportMasterState {
+		Stopped, /* no incoming or invalid signal/data for master to run with */
+		Waiting, /* waiting to get full lock on incoming signal/data */
+		Running  /* lock achieved, master is generating meaningful speed & position */
+	};
+
+	TransportMasterState transport_master_tracking_state;
+	samplepos_t master_wait_end;
+	void track_transport_master (float slave_speed, samplepos_t slave_transport_sample);
+	bool follow_transport_master (pframes_t nframes);
 
 	void sync_source_changed (SyncSource, samplepos_t pos, pframes_t cycle_nframes);
 	void reset_slave_state ();

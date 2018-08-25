@@ -83,7 +83,7 @@ MIDIClock_TransportMaster::set_session (Session *session)
 }
 
 bool
-MIDIClock_TransportMaster::speed_and_position (double& speed, samplepos_t& pos)
+MIDIClock_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, samplepos_t now)
 {
 	if (!_running) {
 		speed = 0.0;
@@ -91,34 +91,20 @@ MIDIClock_TransportMaster::speed_and_position (double& speed, samplepos_t& pos)
 		return true;
 	}
 
-	/* compute speed and position */
-
 	speed = _speed;
 
-	samplepos_t engine_now = ENGINE->sample_time();
-
-	// calculate position
-	if (engine_now > last_timestamp) {
-		// we are in between MIDI clock messages
-		// so we interpolate position according to speed
-		samplecnt_t elapsed = engine_now - last_timestamp;
-		pos = (samplepos_t) (should_be_position + double(elapsed) * _speed);
-	} else {
-		// A new MIDI clock message has arrived this cycle
-		pos = should_be_position;
-	}
+	pos = should_be_position;
+	pos += (now - last_timestamp) * _speed;
 
 	return true;
 }
 
 void
-MIDIClock_TransportMaster::pre_process (pframes_t nframes)
+MIDIClock_TransportMaster::pre_process (pframes_t nframes, samplepos_t now)
 {
 	/* Read and parse incoming MIDI */
 
-	update_from_midi (nframes);
-
-	samplepos_t now = ENGINE->sample_time_at_cycle_start ();
+	update_from_midi (nframes, now);
 
 	/* no timecode for 1/4 second ? conclude that its stopped */
 	if (last_timestamp &&
@@ -352,7 +338,7 @@ MIDIClock_TransportMaster::resolution() const
 }
 
 std::string
-MIDIClock_TransportMaster::approximate_current_delta() const
+MIDIClock_TransportMaster::delta_string() const
 {
 	char delta[80];
 	if (last_timestamp == 0 || starting()) {

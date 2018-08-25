@@ -50,11 +50,13 @@ LTC_TransportMaster::LTC_TransportMaster (std::string const & name)
 	: TimecodeTransportMaster (name, LTC)
 	, did_reset_tc_format (false)
 	, decoder (0)
+	, samples_per_ltc_frame (0)
 	, fps_detected (false)
 	, monotonic_cnt (0)
 	, delayedlocked (10)
+	, ltc_detect_fps_cnt (0)
+	, ltc_detect_fps_max (0)
 	, sync_lock_broken (false)
-
 {
 	if ((_port = AudioEngine::instance()->register_input_port (DataType::AUDIO, string_compose ("%1 in", _name))) == 0) {
 		throw failed_constructor();
@@ -62,7 +64,6 @@ LTC_TransportMaster::LTC_TransportMaster (std::string const & name)
 
 	DEBUG_TRACE (DEBUG::Slave, string_compose ("LTC registered %1\n", _port->name()));
 
-	ltc_detect_fps_cnt = ltc_detect_fps_max = 0;
 	memset(&prev_sample, 0, sizeof(LTCFrameExt));
 
 	resync_latency();
@@ -86,11 +87,15 @@ LTC_TransportMaster::set_session (Session *s)
 		ltc_timecode = _session->config.get_timecode_format();
 		a3e_timecode = _session->config.get_timecode_format();
 
+		if (Config->get_use_session_timecode_format() && _session) {
+			samples_per_timecode_frame = _session->samples_per_timecode_frame();
+		}
+
 		if (decoder) {
 			ltc_decoder_free (decoder);
 		}
-		decoder = ltc_decoder_create((int) samples_per_ltc_frame, 128 /*queue size*/);
 
+		decoder = ltc_decoder_create((int) samples_per_ltc_frame, 128 /*queue size*/);
 
 		parse_timecode_offset();
 		reset();
@@ -153,7 +158,6 @@ void
 LTC_TransportMaster::resync_xrun()
 {
 	DEBUG_TRACE (DEBUG::LTC, "LTC resync_xrun()\n");
-	dll_initstate = 0;
 	sync_lock_broken = false;
 }
 
@@ -161,7 +165,6 @@ void
 LTC_TransportMaster::resync_latency()
 {
 	DEBUG_TRACE (DEBUG::LTC, "LTC resync_latency()\n");
-	dll_initstate = 0;
 	sync_lock_broken = false;
 
 	if (!_port) {
@@ -179,17 +182,18 @@ LTC_TransportMaster::reset (bool with_ts)
 	}
 	transport_direction = 0;
 	ltc_speed = 0;
-	dll_initstate = 0;
 	sync_lock_broken = false;
+	monotonic_cnt = 0;
 
 	ActiveChanged (false); /* EMIT SIGNAL */
 }
 
 void
-LTC_TransportMaster::parse_ltc(const ARDOUR::pframes_t nframes, const Sample* const in, const ARDOUR::samplecnt_t posinfo)
+LTC_TransportMaster::parse_ltc (const ARDOUR::pframes_t nframes, const Sample* const in, const ARDOUR::samplecnt_t posinfo)
 {
 	pframes_t i;
 	unsigned char sound[8192];
+
 	if (nframes > 8192) {
 		/* TODO warn once or wrap, loop conversion below
 		 * does jack/A3 support > 8192 spp anyway?
@@ -198,25 +202,26 @@ LTC_TransportMaster::parse_ltc(const ARDOUR::pframes_t nframes, const Sample* co
 	}
 
 	for (i = 0; i < nframes; i++) {
-		const int snd=(int)rint((127.0*in[i])+128.0);
+		const int snd=(int) rint ((127.0*in[i])+128.0);
 		sound[i] = (unsigned char) (snd&0xff);
 	}
-	ltc_decoder_write(decoder, sound, nframes, posinfo);
+
+	ltc_decoder_write (decoder, sound, nframes, posinfo);
+
 	return;
 }
 
 bool
 LTC_TransportMaster::equal_ltc_sample_time(LTCFrame *a, LTCFrame *b) {
-	if (       a->frame_units != b->frame_units
-		|| a->frame_tens  != b->frame_tens
-		|| a->dfbit       != b->dfbit
-		|| a->secs_units  != b->secs_units
-		|| a->secs_tens   != b->secs_tens
-		|| a->mins_units  != b->mins_units
-		|| a->mins_tens   != b->mins_tens
-		|| a->hours_units != b->hours_units
-		|| a->hours_tens  != b->hours_tens
-	     ) {
+	if (a->frame_units != b->frame_units ||
+	    a->frame_tens  != b->frame_tens ||
+	    a->dfbit       != b->dfbit ||
+	    a->secs_units  != b->secs_units ||
+	    a->secs_tens   != b->secs_tens ||
+	    a->mins_units  != b->mins_units ||
+	    a->mins_tens   != b->mins_tens ||
+	    a->hours_units != b->hours_units ||
+	    a->hours_tens  != b->hours_tens) {
 		return false;
 	}
 	return true;
@@ -326,46 +331,58 @@ LTC_TransportMaster::detect_ltc_fps(int frameno, bool df)
 	ltc_timecode = tc_format;
 	a3e_timecode = cur_timecode;
 
+	if (Config->get_use_session_timecode_format() && _session) {
+		samples_per_timecode_frame = _session->samples_per_timecode_frame();
+	} else {
+		samples_per_timecode_frame = ENGINE->sample_rate() / Timecode::timecode_to_frames_per_second (ltc_timecode);
+	}
+
 	return fps_changed;
 }
 
 void
-LTC_TransportMaster::process_ltc(samplepos_t const /*now*/)
+LTC_TransportMaster::process_ltc(samplepos_t const now)
 {
 	LTCFrameExt sample;
-	enum LTC_TV_STANDARD tv_standard = LTC_TV_625_50;
-	while (ltc_decoder_read(decoder, &sample)) {
+	LTC_TV_STANDARD tv_standard = LTC_TV_625_50;
+
+	while (ltc_decoder_read (decoder, &sample)) {
+
 		SMPTETimecode stime;
 
-		ltc_frame_to_time(&stime, &sample.ltc, 0);
+		ltc_frame_to_time (&stime, &sample.ltc, 0);
 		timecode.negative  = false;
 		timecode.subframes  = 0;
 
 		/* set timecode.rate and timecode.drop: */
-		bool ltc_is_static = equal_ltc_sample_time(&prev_sample.ltc, &sample.ltc);
 
-		if (detect_discontinuity(&sample, ceil(timecode.rate), !fps_detected)) {
-			if (fps_detected) { ltc_detect_fps_cnt = ltc_detect_fps_max = 0; }
-			fps_detected=false;
+		const bool ltc_is_stationary = equal_ltc_sample_time (&prev_sample.ltc, &sample.ltc);
+
+		if (detect_discontinuity (&sample, ceil(timecode.rate), !fps_detected)) {
+
+			if (fps_detected) {
+				ltc_detect_fps_cnt = ltc_detect_fps_max = 0;
+			}
+
+			fps_detected = false;
 		}
 
-		if (!ltc_is_static && detect_ltc_fps(stime.frame, (sample.ltc.dfbit)? true : false)) {
+		if (!ltc_is_stationary && detect_ltc_fps (stime.frame, (sample.ltc.dfbit)? true : false)) {
 			reset();
 			fps_detected=true;
 		}
 
-#if 1 // Devel/Debug
-		fprintf(stdout, "LTC %02d:%02d:%02d%c%02d | %8lld %8lld%s\n",
-			stime.hours,
-			stime.mins,
-			stime.secs,
-			(sample.ltc.dfbit) ? '.' : ':',
-			stime.frame,
-			sample.off_start,
-			sample.off_end,
-			sample.reverse ? " R" : "  "
-			);
-#endif
+		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC@%ld %02d:%02d:%02d%c%02d | %8lld %8lld%s\n",
+		                                         now,
+		                                         stime.hours,
+		                                         stime.mins,
+		                                         stime.secs,
+		                                         (sample.ltc.dfbit) ? '.' : ':',
+		                                         stime.frame,
+		                                         sample.off_start,
+		                                         sample.off_end,
+		                                         sample.reverse ? " R" : "  "
+			             ));
 
 		/* when a full LTC sample is decoded, the timecode the LTC sample
 		 * is referring has just passed.
@@ -394,13 +411,13 @@ LTC_TransportMaster::process_ltc(samplepos_t const /*now*/)
 			ltc_frame_increment(&sample.ltc, fps_i, tv_standard, 0);
 			ltc_frame_to_time(&stime, &sample.ltc, 0);
 			transport_direction = 1;
-			sample.off_start -= ltc_frame_alignment(_session->samples_per_timecode_frame(), tv_standard);
-			sample.off_end -= ltc_frame_alignment(_session->samples_per_timecode_frame(), tv_standard);
+			sample.off_start -= ltc_frame_alignment(samples_per_timecode_frame, tv_standard);
+			sample.off_end -= ltc_frame_alignment(samples_per_timecode_frame, tv_standard);
 		} else {
 			ltc_frame_decrement(&sample.ltc, fps_i, tv_standard, 0);
 			int off = sample.off_end - sample.off_start;
-			sample.off_start += off - ltc_frame_alignment(_session->samples_per_timecode_frame(), tv_standard);
-			sample.off_end += off - ltc_frame_alignment(_session->samples_per_timecode_frame(), tv_standard);
+			sample.off_start += off - ltc_frame_alignment(samples_per_timecode_frame, tv_standard);
+			sample.off_end += off - ltc_frame_alignment(samples_per_timecode_frame, tv_standard);
 			transport_direction = -1;
 		}
 
@@ -409,115 +426,125 @@ LTC_TransportMaster::process_ltc(samplepos_t const /*now*/)
 		timecode.seconds = stime.secs;
 		timecode.frames  = stime.frame;
 
-		/* map LTC timecode to session TC setting */
-		samplepos_t ltc_frame; ///< audio-sample corresponding to LTC sample
-		Timecode::timecode_to_sample (timecode, ltc_frame, true, false,
-			double(ENGINE->sample_rate()),
-			_session->config.get_subframes_per_frame(),
-			timecode_negative_offset, timecode_offset
-			);
+		samplepos_t ltc_sample; // audio-sample corresponding to position of LTC frame
 
-		ltc_frame += ltc_slave_latency.max;
+		if (_session && Config->get_use_session_timecode_format()) {
+			Timecode::timecode_to_sample (timecode, ltc_sample, true, false, (double)ENGINE->sample_rate(), _session->config.get_subframes_per_frame(), timecode_negative_offset, timecode_offset);
+		} else {
+			Timecode::timecode_to_sample (timecode, ltc_sample, true, false, (double)ENGINE->sample_rate(), 100, timecode_negative_offset, timecode_offset);
+		}
+
+		ltc_sample += ltc_slave_latency.max;
+
+		/* This LTC frame spans sample time between sample.off_start  .. sample.off_end
+		 *
+		 * NOTE: these sample times are NOT the ones that LTC is representing. They are
+		 * derived our own audioengine's monotonic audio clock.
+		 *
+		 * So we expect the next frame to span sample.off_end+1 and ... <don't care for now>.
+		 * That isn't the time we will necessarily receive the LTC frame, but the decoder
+		 * should tell us that its span begins there.
+		 *
+		 */
 
 		samplepos_t cur_timestamp = sample.off_end + 1;
-		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC F: %1 LF: %2  N: %3 L: %4\n", ltc_frame, last_ltc_sample, cur_timestamp, last_timestamp));
-		if (sample.off_end + 1 <= last_timestamp || last_timestamp == 0) {
+
+		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC S: %1 LS: %2  N: %3 L: %4\n", ltc_sample, last_ltc_sample, cur_timestamp, last_timestamp));
+
+		if (cur_timestamp <= last_timestamp || last_timestamp == 0) {
 			DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC speed: UNCHANGED: %1\n", ltc_speed));
 		} else {
-			ltc_speed = double(ltc_frame - last_ltc_sample) / double(cur_timestamp - last_timestamp);
+			ltc_speed = double (ltc_sample - last_ltc_sample) / double (cur_timestamp - last_timestamp);
 			DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC speed: %1\n", ltc_speed));
 		}
 
-		if (fabs(ltc_speed) > 10.0) {
+		if (fabs (ltc_speed) > 10.0) {
 			ltc_speed = 0;
 		}
 
-		last_timestamp = sample.off_end + 1;
-		last_ltc_sample = ltc_frame;
+		last_timestamp = cur_timestamp;
+		last_ltc_sample = ltc_sample;
+
 	} /* end foreach decoded LTC sample */
 }
 
-void
-LTC_TransportMaster::init_engine_dll (samplepos_t pos, int32_t inc)
-{
-	double omega = 2.0 * M_PI * double(inc) / double(ENGINE->sample_rate());
-	b = 1.4142135623730950488 * omega;
-	c = omega * omega;
-
-	e2 = double(ltc_speed * inc);
-	t0 = double(pos);
-	t1 = t0 + e2;
-	DEBUG_TRACE (DEBUG::LTC, string_compose ("[re-]init Engine DLL %1 %2 %3\n", t0, t1, e2));
-}
-
 bool
-LTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos)
+LTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, samplepos_t now)
 {
-	speed = _speed;
-	pos = _position;
+	/* XXX these are not atomics and maybe modified in a thread other other than the one
+	   that is executing this.
+	*/
+
+	speed = ltc_speed;
+
+	/* provide a .1% deadzone to lock the speed */
+	if (fabs (speed - 1.0) <= 0.001) {
+		speed = 1.0;
+	}
+
+	if (speed != 0 && delayedlocked == 0 && fabs(speed) != 1.0) {
+		sync_lock_broken = true;
+		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC speed not locked %1 based on %2\n", speed, ltc_speed));
+	}
+
+	pos =  last_ltc_sample;
+	pos += (now - last_timestamp) * speed;
+
 	return true;
 }
 
 void
-LTC_TransportMaster::pre_process (pframes_t nframes)
+LTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now)
 {
-	if (!_session) {
-		return;
-	}
-
-	bool engine_init_called = false;
-	samplepos_t now = ENGINE->sample_time_at_cycle_start();
-	samplepos_t sess_pos = _session->transport_sample(); // corresponds to now
-
-	Sample* in;
-
-	in = (Sample*) AudioEngine::instance()->port_engine().get_buffer (_port->port_handle(), nframes);
-
+	Sample* in = (Sample*) AudioEngine::instance()->port_engine().get_buffer (_port->port_handle(), nframes);
 	sampleoffset_t skip = now - (monotonic_cnt + nframes);
 	monotonic_cnt = now;
-	DEBUG_TRACE (DEBUG::LTC, string_compose ("speed_and_position - TID:%1 | latency: %2 | skip %3 | session ? %4| last %5 | dir %6 | sp %7\n",
+
+	DEBUG_TRACE (DEBUG::LTC, string_compose ("pre-process - TID:%1 | latency: %2 | skip %3 | session ? %4| last %5 | dir %6 | sp %7\n",
 	                                         pthread_name(), ltc_slave_latency.max, skip, (_session ? 'y' : 'n'), last_timestamp, transport_direction, ltc_speed));
 
 	if (last_timestamp == 0) {
-		if (delayedlocked < 10) ++delayedlocked;
-	} else if (dll_initstate != transport_direction && ltc_speed != 0) {
-
-		ActiveChanged (true); /* EMIT SIGNAL */
-
-		dll_initstate = transport_direction;
-		init_engine_dll(last_ltc_sample + rint(ltc_speed * double(2 * nframes + now - last_timestamp)),
-				ENGINE->samples_per_cycle());
-		engine_init_called = true;
-	}
-
-	if (in) {
-		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC Process eng-tme: %1 eng-pos: %2\n", now, sess_pos));
-		/* when the jack-graph changes and if ardour performs
-		 * locates, the audioengine is stopped (skipping samples) while
-		 * jack [time] moves along.
-		 */
-		if (skip > 0) {
-			DEBUG_TRACE (DEBUG::LTC, string_compose("engine skipped %1 samples. Feeding silence to LTC parser.\n", skip));
-			if (skip >= 8192) skip = 8192;
-			unsigned char sound[8192];
-			memset(sound, 0x80, sizeof(char) * skip);
-			ltc_decoder_write(decoder, sound, nframes, now);
-		} else if (skip != 0) {
-			/* this should never happen. it may if monotonic_cnt, now overflow on 64bit */
-			DEBUG_TRACE (DEBUG::LTC, string_compose("engine skipped %1 samples\n", skip));
-			reset();
+		if (delayedlocked < 10) {
+			++delayedlocked;
 		}
 
-		parse_ltc(nframes, in, now);
-		process_ltc(now);
+	} else if (ltc_speed != 0) {
+
+		ActiveChanged (true); /* EMIT SIGNAL */
 	}
+
+	DEBUG_TRACE (DEBUG::LTC, string_compose ("pre-process with audio clock time: %1\n", now));
+
+	/* if the audioengine failed to take the process lock, it won't
+	   call this method, and time will appear to skip. Reset the
+	   LTC decoder's state by giving it some silence.
+	*/
+
+	if (skip > 0) {
+		DEBUG_TRACE (DEBUG::LTC, string_compose("engine skipped %1 samples. Feeding silence to LTC parser.\n", skip));
+		if (skip >= 8192) skip = 8192;
+		unsigned char sound[8192];
+		memset (sound, 0x80, sizeof(char) * skip);
+		ltc_decoder_write (decoder, sound, nframes, now);
+	} else if (skip != 0) {
+		/* this should never happen. it may if monotonic_cnt, now overflow on 64bit */
+		DEBUG_TRACE (DEBUG::LTC, string_compose("engine skipped %1 samples\n", skip));
+		reset();
+	}
+
+	/* Now feed the incoming LTC signal into the decoder */
+
+	parse_ltc (nframes, in, now);
+
+	/* and pull out actual LTC frame data */
+
+	process_ltc (now);
 
 	if (last_timestamp == 0) {
 		DEBUG_TRACE (DEBUG::LTC, "last timestamp == 0\n");
-		_speed = 0;
-		_position = _session->transport_sample();
 		return;
 	} else if (ltc_speed != 0) {
+		DEBUG_TRACE (DEBUG::LTC, string_compose ("speed non-zero (%1)\n", ltc_speed));
 		if (delayedlocked > 1) {
 			delayedlocked--;
 		} else if (current_delta == 0) {
@@ -525,82 +552,12 @@ LTC_TransportMaster::pre_process (pframes_t nframes)
 		}
 	}
 
-	if (abs(now - last_timestamp) > FLYWHEEL_TIMEOUT) {
+	if (abs (now - last_timestamp) > FLYWHEEL_TIMEOUT) {
 		DEBUG_TRACE (DEBUG::LTC, "flywheel timeout\n");
 		reset();
-		_speed = 0;
-		_position = _session->transport_sample();
+		/* don't change position from last known */
 		ActiveChanged (false); /* EMIT SIGNAL */
 		return;
-	}
-
-	/* it take 2 cycles from naught to rolling.
-	 * during these to initial cycles the speed == 0
-	 *
-	 * the first cycle:
-	 * DEBUG::Slave: slave stopped, move to NNN
-	 * DEBUG::Transport: Request forced locate to NNN
-	 * DEBUG::Slave: slave state 0 @ NNN speed 0 cur delta VERY-LARGE-DELTA avg delta 1800
-	 * DEBUG::Slave: silent motion
-	 * DEBUG::Transport: realtime stop @ NNN
-	 * DEBUG::Transport: Butler transport work, todo = PostTransportStop,PostTransportLocate,PostTransportClearSubstate
-	 *
-	 * [session skips samples to locate, backend/audio time keeps rolling on]
-	 *
-	 * the second cycle:
-	 *
-	 * DEBUG::LTC: [re-]init Engine DLL
-	 * DEBUG::Slave: slave stopped, move to NNN+
-	 * ...
-	 *
-	 * we need to seek two cycles ahead: 2 * nframes
-	 */
-	if (dll_initstate == 0) {
-		DEBUG_TRACE (DEBUG::LTC, "engine DLL not initialized. ltc_speed\n");
-		_speed = 0;
-		_position = last_ltc_sample + rint(ltc_speed * double(2 * nframes + now - last_timestamp));
-		return;
-	}
-
-	/* interpolate position according to speed and time since last LTC-sample*/
-	double speed_flt = ltc_speed;
-	double elapsed = (now - last_timestamp) * speed_flt;
-
-	if (!engine_init_called) {
-		const double e = elapsed + double (last_ltc_sample - sess_pos);
-		t0 = t1;
-		t1 += b * e + e2;
-		e2 += c * e;
-		speed_flt = (t1 - t0) / double(ENGINE->samples_per_cycle());
-		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC engine DLL t0:%1 t1:%2 err:%3 spd:%4 ddt:%5\n", t0, t1, e, speed_flt, e2 - ENGINE->samples_per_cycle() ));
-	} else {
-		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC adjusting elapsed (no DLL) from %1 by %2\n", elapsed, (2 * nframes * ltc_speed)));
-		speed_flt = 0;
-		elapsed += 2.0 * nframes * ltc_speed; /* see note above */
-	}
-
-	_speed = speed_flt;
-	_position = last_ltc_sample + rint(elapsed);
-	current_delta = (_position - sess_pos);
-
-	if (_position < 0) {
-		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC went negative: %1 + %2 .. reset\n", last_ltc_sample, rint (elapsed)));
-		reset();
-		_speed = 0;
-		return;
-	}
-
-	DEBUG_TRACE (DEBUG::LTC, string_compose ("LTCsync spd: %1 pos: %2 | last-pos: %3 elapsed: %4 delta: %5\n",
-						 _speed, _position, last_ltc_sample, elapsed, current_delta));
-
-	/* provide a .1% deadzone to lock the speed */
-	if (fabs (_speed - 1.0) <= 0.001) {
-		_speed = 1.0;
-	}
-
-	if (_speed != 0 && delayedlocked == 0 && fabs(_speed) != 1.0) {
-		sync_lock_broken = true;
-		DEBUG_TRACE (DEBUG::LTC, string_compose ("LTC speed not locked %1 %2\n", _speed, ltc_speed));
 	}
 }
 
@@ -625,7 +582,7 @@ LTC_TransportMaster::apparent_timecode_format () const
 }
 
 std::string
-LTC_TransportMaster::approximate_current_position() const
+LTC_TransportMaster::position_string() const
 {
 	if (last_timestamp == 0) {
 		return " --:--:--:--";
@@ -634,10 +591,10 @@ LTC_TransportMaster::approximate_current_position() const
 }
 
 std::string
-LTC_TransportMaster::approximate_current_delta() const
+LTC_TransportMaster::delta_string() const
 {
 	char delta[80];
-	if (last_timestamp == 0 || dll_initstate == 0) {
+	if (last_timestamp == 0) {
 		snprintf(delta, sizeof(delta), "\u2012\u2012\u2012\u2012");
 	} else if ((monotonic_cnt - last_timestamp) > 2 * samples_per_ltc_frame) {
 		snprintf(delta, sizeof(delta), "%s", _("flywheel"));

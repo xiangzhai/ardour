@@ -36,7 +36,7 @@
 #include "midi++/types.h"
 
 
-/* used for approximate_current_delta(): */
+/* used for delta_string(): */
 #define PLUSMINUS(A) ( ((A)<0) ? "-" : (((A)>0) ? "+" : "\u00B1") )
 #define LEADINGZERO(A) ( (A)<10 ? "   " : (A)<100 ? "  " : (A)<1000 ? " " : "" )
 
@@ -175,7 +175,7 @@ class LIBARDOUR_API Slave {
 	/**
 	 * @return - current time-delta between engine and sync-source
 	 */
-	virtual std::string approximate_current_delta() const { return ""; }
+	virtual std::string delta_string () const { return ""; }
 
 };
 
@@ -238,7 +238,7 @@ class LIBARDOUR_API TimecodeSlave : public Slave {
 	   should NOT do any computation, but should use a cached value
 	   of the TC source position.
 	*/
-	virtual std::string approximate_current_position() const = 0;
+	virtual std::string position_string () const = 0;
 
 	samplepos_t        timecode_offset;
 	bool              timecode_negative_offset;
@@ -264,8 +264,8 @@ class LIBARDOUR_API MTC_Slave : public TimecodeSlave {
 	bool give_slave_full_control_over_transport_speed() const;
 
         Timecode::TimecodeFormat apparent_timecode_format() const;
-        std::string approximate_current_position() const;
-	std::string approximate_current_delta() const;
+        std::string position_string () const;
+	std::string delta_string () const;
 
   private:
 	Session&    session;
@@ -346,8 +346,8 @@ public:
 	bool give_slave_full_control_over_transport_speed() const { return true; }
 
 	Timecode::TimecodeFormat apparent_timecode_format() const;
-	std::string approximate_current_position() const;
-	std::string approximate_current_delta() const;
+	std::string position_string() const;
+	std::string delta_string() const;
 
   private:
 	void parse_ltc(const pframes_t, const Sample* const, const samplecnt_t);
@@ -419,7 +419,7 @@ class LIBARDOUR_API MIDIClock_Slave : public Slave {
 	bool give_slave_full_control_over_transport_speed() const { return true; }
 
 	void set_bandwidth (double a_bandwith) { bandwidth = a_bandwith; }
-	std::string approximate_current_delta() const;
+	std::string delta_string () const;
 
   protected:
 	ISlaveSessionProxy* session;

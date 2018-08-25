@@ -34,10 +34,6 @@ Engine_TransportMaster::Engine_TransportMaster (AudioEngine& e)
 	, engine (e)
 	, _starting (false)
 {
-	double x;
-	samplepos_t p;
-	/* call this to initialize things */
-	speed_and_position (x, p);
 }
 
 Engine_TransportMaster::~Engine_TransportMaster ()
@@ -57,15 +53,19 @@ Engine_TransportMaster::ok() const
 }
 
 void
-Engine_TransportMaster::pre_process (pframes_t)
+Engine_TransportMaster::pre_process (pframes_t, samplepos_t)
 {
 	/* nothing to do */
 }
 
 bool
-Engine_TransportMaster::speed_and_position (double& sp, samplepos_t& position)
+Engine_TransportMaster::speed_and_position (double& sp, samplepos_t& position, samplepos_t /* now */)
 {
 	boost::shared_ptr<AudioBackend> backend = engine.current_backend();
+
+	/* 3rd argument (now) doesn't matter here because we're always being
+	 * called synchronously with the engine.
+	 */
 
 	if (backend && backend->speed_and_position (sp, position)) {
 		return true;
