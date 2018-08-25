@@ -259,7 +259,7 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 
 	_master_invalid_this_cycle = false;
 
-	DEBUG_TRACE (DEBUG::Slave, string_compose ("computed resampling ratio as %1\n", engine_speed));
+	DEBUG_TRACE (DEBUG::Slave, string_compose ("computed resampling ratio as %1 with position = %2 and speed = %3\n", engine_speed, _master_position, _master_speed));
 	engine_speed  = 0.98;
 	return engine_speed;
 }
