@@ -717,7 +717,7 @@ public:
 	static PBD::Signal1<void, samplepos_t> StartTimeChanged;
 	static PBD::Signal1<void, samplepos_t> EndTimeChanged;
 
-	void   request_sync_source (TransportMaster*);
+	void   request_sync_source (boost::shared_ptr<TransportMaster>);
 	bool   synced_to_engine() const { return config.get_external_sync() && Config->get_sync_source() == Engine; }
 
 	double engine_speed() const { return _engine_speed; }
@@ -1268,11 +1268,6 @@ private:
 	unsigned int            _xrun_count;
 
 	std::string             _missing_file_replacement;
-
-	void mtc_status_changed (bool);
-	PBD::ScopedConnection mtc_status_connection;
-	void ltc_status_changed (bool);
-	PBD::ScopedConnection ltc_status_connection;
 
 	void initialize_latencies ();
 	void update_latency (bool playback);
