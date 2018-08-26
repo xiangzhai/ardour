@@ -394,15 +394,12 @@ AudioEngine::process_callback (pframes_t nframes)
 		Freewheel (nframes);
 	} else {
 		if (Port::cycle_nframes () <= nframes) {
-			cerr << "********** straight process " << Port::cycle_nframes() << " of " << nframes << endl;
 			_session->process (Port::cycle_nframes ());
 		} else {
 			pframes_t remain = Port::cycle_nframes ();
 			while (remain > 0) {
 				pframes_t nf = std::min (remain, nframes);
-				cerr << "********** calling Session::process (" << nf << ")\n";
 				_session->process (nf);
-				cerr << "completed\n";
 				remain -= nf;
 				if (remain > 0) {
 					split_cycle (nf);
