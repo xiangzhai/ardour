@@ -30,6 +30,7 @@
 using namespace ARDOUR;
 using namespace std;
 
+#define ENGINE AudioEngine::instance()
 #define port_engine AudioEngine::instance()->port_engine()
 
 AudioPort::AudioPort (const std::string& name, PortFlags flags)
@@ -127,7 +128,7 @@ AudioPort::get_audio_buffer (pframes_t nframes)
 	Sample* addr;
 
 	if (!externally_connected ()) {
-		addr = (Sample *) port_engine.get_buffer (_port_handle, _cycle_nframes) + _global_port_buffer_offset;
+		addr = (Sample *) port_engine.get_buffer (_port_handle, nframes);
 	} else {
 		/* _data was read and resampled as necessary in ::cycle_start */
 		addr = &_data[_global_port_buffer_offset];
@@ -143,5 +144,5 @@ AudioPort::engine_get_whole_audio_buffer ()
 {
 	/* caller must hold process lock */
 	assert (_port_handle);
-	return (Sample *) port_engine.get_buffer (_port_handle, _cycle_nframes);
+	return (Sample *) port_engine.get_buffer (_port_handle, ENGINE->samples_per_cycle());
 }
