@@ -656,6 +656,20 @@ PortManager::connect_callback (const string& a, const string& b, bool conn)
 		port_b = x->second;
 	}
 
+	if (conn) {
+		if (port_a && !port_b) {
+			port_a->increment_external_connections ();
+		} else if (port_b && !port_a) {
+			port_b->increment_external_connections ();
+		}
+	} else {
+		if (port_a && !port_b) {
+			port_a->decrement_external_connections ();
+		} else if (port_b && !port_a) {
+			port_b->decrement_external_connections ();
+		}
+	}
+
 	PortConnectedOrDisconnected (
 		port_a, a,
 		port_b, b,
