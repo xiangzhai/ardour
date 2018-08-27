@@ -73,3 +73,15 @@ Engine_TransportMaster::speed_and_position (double& sp, samplepos_t& position, s
 
 	return false;
 }
+
+std::string
+Engine_TransportMaster::position_string () const
+{
+	return std::string();
+}
+
+std::string
+Engine_TransportMaster::delta_string () const
+{
+	return std::string();
+}

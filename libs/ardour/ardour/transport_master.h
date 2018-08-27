@@ -181,6 +181,13 @@ class LIBARDOUR_API TransportMaster {
 	 */
 	virtual std::string delta_string() const { return ""; }
 
+	/* this is intended to be used by a UI and polled from a timeout. it should
+	   return a string describing the current position of the TC source. it
+	   should NOT do any computation, but should use a cached value
+	   of the TC source position.
+	*/
+	virtual std::string position_string() const = 0;
+
 	virtual bool can_loop() const { return false; }
 
 	virtual Location* loop_location() const { return 0; }
@@ -273,13 +280,6 @@ class LIBARDOUR_API TimecodeTransportMaster : public TransportMaster {
 	TimecodeTransportMaster (std::string const & name, SyncSource type) : TransportMaster (type, name) {}
 
 	virtual Timecode::TimecodeFormat apparent_timecode_format() const = 0;
-
-	/* this is intended to be used by a UI and polled from a timeout. it should
-	   return a string describing the current position of the TC source. it
-	   should NOT do any computation, but should use a cached value
-	   of the TC source position.
-	*/
-	virtual std::string position_string() const = 0;
 
 	samplepos_t        timecode_offset;
 	bool              timecode_negative_offset;
@@ -440,6 +440,7 @@ class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public T
 	samplecnt_t resolution () const;
 	bool requires_seekahead () const { return false; }
 
+	std::string position_string() const;
 	std::string delta_string() const;
 
   protected:
@@ -496,6 +497,10 @@ class LIBARDOUR_API Engine_TransportMaster : public TransportMaster
 	samplecnt_t resolution () const { return 1; }
 	bool requires_seekahead () const { return false; }
 	bool sample_clock_synced() const { return true; }
+
+
+	std::string position_string() const;
+	std::string delta_string() const;
 
   private:
         AudioEngine& engine;

@@ -343,6 +343,12 @@ MIDIClock_TransportMaster::resolution() const
 }
 
 std::string
+MIDIClock_TransportMaster::position_string () const
+{
+	return std::string();
+}
+
+std::string
 MIDIClock_TransportMaster::delta_string() const
 {
 	char delta[80];

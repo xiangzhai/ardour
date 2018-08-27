@@ -229,6 +229,11 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 
 			DEBUG_TRACE (DEBUG::Slave, string_compose ("slave @ %1 speed %2 cur delta %3 matching speed %4\n", _master_position, _master_speed, delta, engine_speed));
 
+			/* provide a .1% deadzone to lock the speed */
+			if (fabs (engine_speed - 1.0) <= 0.001) {
+				engine_speed = 1.0;
+			}
+
 			if (_current_master->sample_clock_synced() && engine_speed != 0.0f) {
 
 				/* if the master is synced to our audio interface via word-clock or similar, then we assume that its speed is binary: 0.0 or 1.0
