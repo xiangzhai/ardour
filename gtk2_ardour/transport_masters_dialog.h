@@ -48,6 +48,7 @@ class TransportMastersDialog : public ArdourDialog
 	struct Row {
 		Gtk::Label label;
 		Gtk::Label type;
+		Gtk::Label format;
 		Gtk::Label current;
 		Gtk::Label timestamp;
 		Gtk::Label delta;
@@ -71,6 +72,7 @@ class TransportMastersDialog : public ArdourDialog
 	Gtk::Label col5_title;
 	Gtk::Label col6_title;
 	Gtk::Label col7_title;
+	Gtk::Label col8_title;
 
 	sigc::connection update_connection;
 

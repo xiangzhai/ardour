@@ -46,11 +46,12 @@ TransportMastersDialog::TransportMastersDialog ()
 
 	col1_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Type")));
 	col2_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Name")));
-	col3_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Current")));
-	col4_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Timestamp")));
-	col5_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Delta")));
-	col6_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Collect")));
-	col7_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Use")));
+	col3_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Format")));
+	col4_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Current")));
+	col5_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Timestamp")));
+	col6_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Delta")));
+	col7_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Collect")));
+	col8_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Use")));
 
 	table.set_spacings (6);
 
@@ -76,7 +77,7 @@ TransportMastersDialog::rebuild ()
 	}
 
 	rows.clear ();
-	table.resize (masters.size()+1, 7);
+	table.resize (masters.size()+1, 8);
 
 	table.attach (col1_title, 0, 1, 0, 1);
 	table.attach (col2_title, 1, 2, 0, 1);
@@ -85,6 +86,7 @@ TransportMastersDialog::rebuild ()
 	table.attach (col5_title, 4, 5, 0, 1);
 	table.attach (col6_title, 5, 6, 0, 1);
 	table.attach (col7_title, 6, 7, 0, 1);
+	table.attach (col8_title, 7, 8, 0, 1);
 
 	uint32_t n = 1;
 
@@ -105,29 +107,38 @@ TransportMastersDialog::rebuild ()
 
 		table.attach (r->type, 0, 1, n, n+1);
 		table.attach (r->label, 1, 2, n, n+1);
-		table.attach (r->current, 2, 3, n, n+1);
-		table.attach (r->timestamp, 3, 4, n, n+1);
-		table.attach (r->delta, 4, 5, n, n+1);
-		table.attach (r->collect_button, 5, 6, n, n+1);
-		table.attach (r->use_button, 6, 7, n, n+1);
+		table.attach (r->format, 2, 3, n, n+1);
+		table.attach (r->current, 3, 4, n, n+1);
+		table.attach (r->timestamp, 4, 5, n, n+1);
+		table.attach (r->delta, 5, 6, n, n+1);
+		table.attach (r->collect_button, 6, 7, n, n+1);
+		table.attach (r->use_button, 7, 8, n, n+1);
 	}
 }
 
 void
 TransportMastersDialog::Row::update (Session* s, samplepos_t now)
 {
+	using namespace Timecode;
+
 	samplepos_t pos;
 	double speed;
 	stringstream ss;
-	Timecode::Time t;
+	Time t;
+	boost::shared_ptr<TimecodeTransportMaster> ttm;
 
 	if (s) {
 		tm->speed_and_position (speed, pos, now);
-		Timecode::sample_to_timecode (pos, t, false, false, 25, false, AudioEngine::instance()->sample_rate(), 100, false, 0);
+		sample_to_timecode (pos, t, false, false, 25, false, AudioEngine::instance()->sample_rate(), 100, false, 0);
 
+		if ((ttm = boost::dynamic_pointer_cast<TimecodeTransportMaster> (tm))) {
+			format.set_text (timecode_format_name (ttm->apparent_timecode_format()));
+		} else {
+			format.set_text ("");
+		}
 		current.set_text (Timecode::timecode_format_time (t));
 		timestamp.set_markup (tm->position_string());
-		delta.set_markup (tm->delta_string());
+		delta.set_markup (tm->delta_string (now));
 	}
 }
 

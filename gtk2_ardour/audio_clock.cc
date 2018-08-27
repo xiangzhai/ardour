@@ -952,7 +952,7 @@ AudioClock::set_slave_info ()
 		case MIDIClock:
 			if (tm) {
 				_left_btn.set_text (sync_source_to_string (tm->type(), true), true);
-				_right_btn.set_text (tm->delta_string (), true);
+				//_right_btn.set_text (tm->delta_string (), true);
 			} else {
 				_left_btn.set_text (_("--pending--"), true);
 				_right_btn.set_text ("", true);
@@ -970,7 +970,7 @@ AudioClock::set_slave_info ()
 					                                    tcmaster->position_string (),
 					                                    matching ? "#66ff66" : "#ff3333"
 								), true);
-					_right_btn.set_text (tm->delta_string (), true);
+					//_right_btn.set_text (tm->delta_string (), true);
 				}
 			} else {
 				_left_btn.set_text (_("--pending--"), true);
