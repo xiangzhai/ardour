@@ -186,6 +186,7 @@ typedef uint64_t microseconds_t;
 #include "time_axis_view_item.h"
 #include "time_info_box.h"
 #include "timers.h"
+#include "transport_masters_dialog.h"
 #include "utils.h"
 #include "utils_videotl.h"
 #include "video_server_dialog.h"
@@ -315,6 +316,7 @@ ARDOUR_UI::ARDOUR_UI (int *argcp, char **argvp[], const char* localedir)
 	, export_video_dialog (X_("video-export"), _("Video Export Dialog"))
 	, lua_script_window (X_("script-manager"), _("Script Manager"))
 	, idleometer (X_("idle-o-meter"), _("Idle'o'Meter"))
+	, transport_masters_dialog (X_("transport-masters"), _("Transport Masters"))
 	, session_option_editor (X_("session-options-editor"), _("Properties"), boost::bind (&ARDOUR_UI::create_session_option_editor, this))
 	, add_video_dialog (X_("add-video"), _("Add Video"), boost::bind (&ARDOUR_UI::create_add_video_dialog, this))
 	, bundle_manager (X_("bundle-manager"), _("Bundle Manager"), boost::bind (&ARDOUR_UI::create_bundle_manager, this))
@@ -474,6 +476,7 @@ ARDOUR_UI::ARDOUR_UI (int *argcp, char **argvp[], const char* localedir)
 		export_video_dialog.set_state (*ui_xml, 0);
 		lua_script_window.set_state (*ui_xml, 0);
 		idleometer.set_state (*ui_xml, 0);
+		transport_masters_dialog.set_state (*ui_xml, 0);
 	}
 
 	/* Separate windows */
@@ -495,6 +498,7 @@ ARDOUR_UI::ARDOUR_UI (int *argcp, char **argvp[], const char* localedir)
 	WM::Manager::instance().register_window (&audio_port_matrix);
 	WM::Manager::instance().register_window (&midi_port_matrix);
 	WM::Manager::instance().register_window (&idleometer);
+	WM::Manager::instance().register_window (&transport_masters_dialog);
 
 	/* do not retain position for add route dialog */
 	add_route_dialog.set_state_mask (WindowProxy::Size);
