@@ -1085,9 +1085,13 @@ Session::follow_transport_master (pframes_t nframes)
 	if (transport_master_tracking_state == Running) {
 
 		if (!actively_recording() && fabs (delta) > tmm.current()->resolution()) {
-			DEBUG_TRACE (DEBUG::Slave, string_compose ("average slave delta %1 greater than slave resolution %2 => no disk output\n", delta, tmm.current()->resolution()));
-			/* run routes as normal, but no disk output */
-			DiskReader::set_no_disk_output (true);
+			DEBUG_TRACE (DEBUG::Slave, string_compose ("average slave delta %1 greater than slave resolution %2\n", delta, tmm.current()->resolution()));
+			if (micro_locate (-delta) != 0) {
+				DEBUG_TRACE (DEBUG::Slave, "micro-locate didn't work, set no disk output true\n");
+
+				/* run routes as normal, but no disk output */
+				DiskReader::set_no_disk_output (true);
+			}
 			return true;
 		}
 
@@ -1124,7 +1128,9 @@ Session::track_transport_master (float slave_speed, samplepos_t slave_transport_
 				master_wait_end = slave_transport_sample + master->seekahead_distance ();
 				DEBUG_TRACE (DEBUG::Slave, string_compose ("slave stopped, but running, requires seekahead to %1\n", master_wait_end));
 				/* we can call locate() here because we are in process context */
-				locate (master_wait_end, false, false);
+				if (micro_locate (master_wait_end - _transport_sample) != 0) {
+					locate (master_wait_end, false, false);
+				}
 				transport_master_tracking_state = Waiting;
 
 			} else {
@@ -1133,7 +1139,9 @@ Session::track_transport_master (float slave_speed, samplepos_t slave_transport_
 
 				if (slave_transport_sample != _transport_sample) {
 					DEBUG_TRACE (DEBUG::Slave, string_compose ("require locate to run. eng: %1 -> sl: %2\n", _transport_sample, slave_transport_sample));
-					locate (slave_transport_sample, false, false);
+					if (micro_locate (slave_transport_sample - _transport_sample) != 0) {
+						locate (slave_transport_sample, false, false);
+					}
 				}
 				transport_master_tracking_state = Running;
 			}
@@ -1158,29 +1166,7 @@ Session::track_transport_master (float slave_speed, samplepos_t slave_transport_
 				   precisely with the master.
 				*/
 
-
-				bool ok = true;
-				samplecnt_t sample_delta = slave_transport_sample - _transport_sample;
-
-				boost::shared_ptr<RouteList> rl = routes.reader();
-				for (RouteList::iterator i = rl->begin(); i != rl->end(); ++i) {
-					boost::shared_ptr<Track> tr = boost::dynamic_pointer_cast<Track> (*i);
-					if (tr && !tr->can_internal_playback_seek (sample_delta)) {
-						ok = false;
-						break;
-					}
-				}
-
-				if (ok) {
-					for (RouteList::iterator i = rl->begin(); i != rl->end(); ++i) {
-						boost::shared_ptr<Track> tr = boost::dynamic_pointer_cast<Track> (*i);
-						if (tr) {
-							tr->internal_playback_seek (sample_delta);
-						}
-					}
-					_transport_sample += sample_delta;
-
-				} else {
+				if (micro_locate (slave_transport_sample - _transport_sample) != 0) {
 					cerr << "cannot micro-seek\n";
 					/* XXX what? */
 				}
