@@ -23,6 +23,7 @@
 #include <vector>
 
 #include <boost/atomic.hpp>
+#include <boost/optional.hpp>
 
 #include <glibmm/threads.h>
 
@@ -71,7 +72,7 @@ class LIBARDOUR_API TransportMaster {
 	static boost::shared_ptr<TransportMaster> factory (SyncSource, std::string const &);
 	static boost::shared_ptr<TransportMaster> factory (XMLNode const &);
 
-	virtual void pre_process (pframes_t nframes, samplepos_t now) = 0;
+	virtual void pre_process (pframes_t nframes, samplepos_t now, boost::optional<samplepos_t>) = 0;
 
 	/**
 	 * This is the most important function to implement:
@@ -181,6 +182,8 @@ class LIBARDOUR_API TransportMaster {
 	 */
 	virtual std::string delta_string() const { return ""; }
 
+	sampleoffset_t current_delta() const { return _current_delta; }
+
 	/* this is intended to be used by a UI and polled from a timeout. it should
 	   return a string describing the current position of the TC source. it
 	   should NOT do any computation, but should use a cached value
@@ -221,10 +224,11 @@ class LIBARDOUR_API TransportMaster {
 	boost::shared_ptr<Port> port() const { return _port; }
 
   protected:
-	SyncSource  _type;
-	std::string _name;
-	Session*    _session;
-	bool        _connected;
+	SyncSource      _type;
+	std::string     _name;
+	Session*        _session;
+	bool            _connected;
+	sampleoffset_t  _current_delta;
 
 	/* DLL - chase incoming data */
 
@@ -294,7 +298,7 @@ class LIBARDOUR_API MTC_TransportMaster : public TimecodeTransportMaster, public
 
 	void set_session (Session*);
 
-	void pre_process (pframes_t nframes, samplepos_t now);
+	void pre_process (pframes_t nframes, samplepos_t now, boost::optional<samplepos_t>);
 
 	bool speed_and_position (double&, samplepos_t&, samplepos_t);
 
@@ -363,7 +367,7 @@ public:
 
 	void set_session (Session*);
 
-	void pre_process (pframes_t nframes, samplepos_t now);
+	void pre_process (pframes_t nframes, samplepos_t now, boost::optional<samplepos_t>);
 	bool speed_and_position (double&, samplepos_t&, samplepos_t);
 
 	bool locked() const;
@@ -403,7 +407,6 @@ public:
 	samplecnt_t     last_timestamp;
 	samplecnt_t     last_ltc_sample;
 	double          ltc_speed;
-	sampleoffset_t  current_delta;
 	int            delayedlocked;
 
 	int            ltc_detect_fps_cnt;
@@ -428,7 +431,7 @@ class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public T
 
 	void set_session (Session*);
 
-	void pre_process (pframes_t nframes, samplepos_t now);
+	void pre_process (pframes_t nframes, samplepos_t now, boost::optional<samplepos_t>);
 
 	void rebind (MidiPort&);
 	bool speed_and_position (double&, samplepos_t&, samplepos_t);
@@ -465,7 +468,6 @@ class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public T
 
 	/// a DLL to track MIDI clock
 
-	sampleoffset_t  current_delta;
 	double _speed;
 	bool _running;
 
@@ -488,7 +490,7 @@ class LIBARDOUR_API Engine_TransportMaster : public TransportMaster
 	Engine_TransportMaster (AudioEngine&);
 	~Engine_TransportMaster  ();
 
-	void pre_process (pframes_t nframes, samplepos_t now);
+	void pre_process (pframes_t nframes, samplepos_t now,  boost::optional<samplepos_t>);
 	bool speed_and_position (double& speed, samplepos_t& pos, samplepos_t);
 
 	bool starting() const { return _starting; }

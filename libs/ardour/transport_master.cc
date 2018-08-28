@@ -36,6 +36,8 @@ TransportMaster::TransportMaster (SyncSource t, std::string const & name)
 	: _type (t)
 	, _name (name)
 	, _session (0)
+	, _connected (false)
+	, _current_delta (0)
 {
 	ARDOUR::AudioEngine::instance()->PortConnectedOrDisconnected.connect_same_thread (port_connection, boost::bind (&TransportMaster::connection_handler, this, _1, _2, _3, _4, _5));
 }

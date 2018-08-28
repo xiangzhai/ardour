@@ -92,6 +92,7 @@ MIDIClock_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, 
 	if (!_running) {
 		speed = 0.0;
 		pos   = should_be_position;
+		_current_delta = 0;
 		return true;
 	}
 
@@ -104,7 +105,7 @@ MIDIClock_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, 
 }
 
 void
-MIDIClock_TransportMaster::pre_process (pframes_t nframes, samplepos_t now)
+MIDIClock_TransportMaster::pre_process (pframes_t nframes, samplepos_t now, boost::optional<samplepos_t> session_pos)
 {
 	/* Read and parse incoming MIDI */
 
@@ -126,6 +127,13 @@ MIDIClock_TransportMaster::pre_process (pframes_t nframes, samplepos_t now)
 	// provide a 0.1% deadzone to lock the speed
 	if (fabs (_speed - 1.0) <= 0.001) {
 		_speed = 1.0;
+	}
+
+	if (session_pos) {
+		const samplepos_t current_pos = should_be_position + ((now - last_timestamp) * _speed);
+		_current_delta = current_pos - *session_pos;
+	} else {
+		_current_delta = 0;
 	}
 
 	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("speed_and_position: speed %1 should-be %2 transport %3 \n", _speed, should_be_position, _session->transport_sample()));
@@ -207,7 +215,7 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 		// so the loop will compensate for accumulating rounding errors
 		error = (double(should_be_position) - (double(_session->transport_sample()) + double(cycle_offset)));
 		const double e = error / double(ENGINE->sample_rate());
-		current_delta = error;
+		_current_delta = error;
 
 		// update DLL
 		t0 = t1;
@@ -258,7 +266,7 @@ MIDIClock_TransportMaster::reset ()
 	last_timestamp = 0;
 
 	_running = true;
-	current_delta = 0;
+	_current_delta = 0;
 }
 
 void
@@ -356,7 +364,7 @@ MIDIClock_TransportMaster::delta_string() const
 		snprintf(delta, sizeof(delta), "\u2012\u2012\u2012\u2012");
 	} else {
 		snprintf(delta, sizeof(delta), "\u0394<span foreground=\"green\" face=\"monospace\" >%s%s%" PRIi64 "</span>sm",
-				LEADINGZERO(abs(current_delta)), PLUSMINUS(-current_delta), abs(current_delta));
+				LEADINGZERO(abs(_current_delta)), PLUSMINUS(-_current_delta), abs(_current_delta));
 	}
 	return std::string(delta);
 }

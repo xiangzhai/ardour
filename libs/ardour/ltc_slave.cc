@@ -180,7 +180,7 @@ LTC_TransportMaster::reset (bool with_ts)
 	DEBUG_TRACE (DEBUG::LTC, "LTC reset()\n");
 	if (with_ts) {
 		last_timestamp = 0;
-		current_delta = 0;
+		_current_delta = 0;
 	}
 	transport_direction = 0;
 	ltc_speed = 0;
@@ -502,7 +502,7 @@ LTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, sample
 }
 
 void
-LTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now)
+LTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now, boost::optional<samplepos_t> session_pos)
 {
 	Sample* in = (Sample*) AudioEngine::instance()->port_engine().get_buffer (_port->port_handle(), nframes);
 	sampleoffset_t skip = now - (monotonic_cnt + nframes);
@@ -555,7 +555,7 @@ LTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now)
 		DEBUG_TRACE (DEBUG::LTC, string_compose ("speed non-zero (%1)\n", ltc_speed));
 		if (delayedlocked > 1) {
 			delayedlocked--;
-		} else if (current_delta == 0) {
+		} else if (_current_delta == 0) {
 			delayedlocked = 0;
 		}
 	}
@@ -566,6 +566,13 @@ LTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now)
 		/* don't change position from last known */
 		ActiveChanged (false); /* EMIT SIGNAL */
 		return;
+	}
+
+	if (session_pos) {
+		const samplepos_t current_pos = last_ltc_sample + ((now - last_timestamp) * ltc_speed);
+		_current_delta = current_pos - *session_pos;
+	} else {
+		_current_delta = 0;
 	}
 }
 
@@ -609,7 +616,7 @@ LTC_TransportMaster::delta_string() const
 	} else {
 		snprintf(delta, sizeof(delta), "\u0394<span foreground=\"%s\" face=\"monospace\" >%s%s%lld</span>sm",
 				sync_lock_broken ? "red" : "green",
-				LEADINGZERO(::llabs(current_delta)), PLUSMINUS(-current_delta), ::llabs(current_delta));
+				LEADINGZERO(::llabs(_current_delta)), PLUSMINUS(-_current_delta), ::llabs(_current_delta));
 	}
 	return std::string(delta);
 }

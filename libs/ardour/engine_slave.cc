@@ -53,7 +53,7 @@ Engine_TransportMaster::ok() const
 }
 
 void
-Engine_TransportMaster::pre_process (pframes_t, samplepos_t)
+Engine_TransportMaster::pre_process (pframes_t, samplepos_t, boost::optional<samplepos_t>)
 {
 	/* nothing to do */
 }
@@ -70,6 +70,8 @@ Engine_TransportMaster::speed_and_position (double& sp, samplepos_t& position, s
 	if (backend && backend->speed_and_position (sp, position)) {
 		return true;
 	}
+
+	_current_delta = 0;
 
 	return false;
 }

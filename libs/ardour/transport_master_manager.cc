@@ -127,9 +127,15 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 		return 1.0;
 	}
 
+	boost::optional<samplepos_t> session_pos;
+
+	if (_session) {
+		session_pos = _session->audible_sample();
+	}
+
 	if (Config->get_run_all_transport_masters_always()) {
 		for (TransportMasters::iterator tm = _transport_masters.begin(); tm != _transport_masters.end(); ++tm) {
-			(*tm)->pre_process (nframes, now);
+			(*tm)->pre_process (nframes, now, session_pos);
 		}
 	}
 
@@ -142,9 +148,8 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 	 * precisely where it is when we starting chasing it ...
 	 */
 
-
 	if (!Config->get_run_all_transport_masters_always() && _current_master) {
-		_current_master->pre_process (nframes, now);
+		_current_master->pre_process (nframes, now, session_pos);
 	}
 
 	if (!_session->config.get_external_sync()) {

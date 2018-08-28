@@ -124,12 +124,18 @@ MTC_TransportMaster::set_session (Session *s)
 }
 
 void
-MTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now)
+MTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now, boost::optional<samplepos_t> session_pos)
 {
 	/* Read and parse incoming MIDI */
 
 	update_from_midi (nframes, now);
 
+	if (session_pos) {
+		const samplepos_t current_pos = current.position + ((now - current.timestamp) * current.speed);
+		_current_delta = current_pos - *session_pos;
+	} else {
+		_current_delta = 0;
+	}
 }
 
 void
@@ -593,10 +599,7 @@ MTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, sample
 						 last_inbound_frame));
 
 	if (last.timestamp == 0) {
-		speed = 0;
-		pos = _session->transport_sample() ; // last.position;
-		DEBUG_TRACE (DEBUG::MTC, string_compose ("first call to MTC_TransportMaster::speed_and_position, pos = %1\n", pos));
-		return true;
+		return false;
 	}
 
 	if (last_inbound_frame && now > last_inbound_frame && now - last_inbound_frame > labs(seekahead_distance())) {
@@ -605,6 +608,7 @@ MTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, sample
 		if (!Config->get_transport_masters_just_roll_when_sync_lost()) {
 			speed = 0;
 			pos = last.position;
+			_current_delta = 0;
 			queue_reset (false);
 			ActiveChanged (false);
 			DEBUG_TRACE (DEBUG::MTC, string_compose ("MTC not seen for 2 samples - reset pending, pos = %1\n", pos));
@@ -664,8 +668,8 @@ MTC_TransportMaster::delta_string () const
 	if (last.timestamp == 0 || reset_pending) {
 		snprintf(delta, sizeof(delta), "\u2012\u2012\u2012\u2012");
 	} else {
-//		snprintf(delta, sizeof(delta), "\u0394<span foreground=\"green\" face=\"monospace\" >%s%s%" PRIi64 "</span>sm",
-//				LEADINGZERO(abs(current_delta)), PLUSMINUS(-current_delta), abs(current_delta));
+		snprintf(delta, sizeof(delta), "\u0394<span foreground=\"green\" face=\"monospace\" >%s%s%" PRIi64 "</span>sm",
+				LEADINGZERO(abs(_current_delta)), PLUSMINUS(-_current_delta), abs(_current_delta));
 	}
 	return std::string(delta);
 }
