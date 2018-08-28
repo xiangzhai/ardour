@@ -138,7 +138,7 @@ TransportMastersDialog::Row::update (Session* s, samplepos_t now)
 		}
 		current.set_text (Timecode::timecode_format_time (t));
 		timestamp.set_markup (tm->position_string());
-		delta.set_markup (tm->delta_string (now));
+		delta.set_markup (tm->delta_string ());
 	}
 }
 
