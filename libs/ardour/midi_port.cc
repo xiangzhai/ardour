@@ -72,20 +72,7 @@ MidiPort::cycle_start (pframes_t nframes)
 	}
 
 	if (receives_input() && _trace_parser) {
-
-		samplepos_t now = AudioEngine::instance()->sample_time_at_cycle_start();
-
-		for (MidiBuffer::iterator b = _buffer->begin(); b != _buffer->end(); ++b) {
-			uint8_t const * buf = (*b).buffer();
-
-			_trace_parser->set_timestamp (now + (*b).time());
-
-			uint32_t limit = (*b).size();
-
-			for (size_t n = 0; n < limit; ++n) {
-				_trace_parser->scanner (buf[n]);
-			}
-		}
+		read_and_parse_entire_midi_buffer_with_no_speed_adjustment (nframes, *_trace_parser, AudioEngine::instance()->sample_time_at_cycle_start());
 	}
 
 	if (inbound_midi_filter) {
