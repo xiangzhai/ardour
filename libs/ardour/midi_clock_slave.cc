@@ -109,24 +109,32 @@ MIDIClock_TransportMaster::pre_process (pframes_t nframes, samplepos_t now, boos
 {
 	/* Read and parse incoming MIDI */
 
-	update_from_midi (nframes, now);
+	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("preprocess with lt = %1 @ %2, running ? %3\n", last_timestamp, now, _running));
 
-	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("preprocess with lt = %1 @ %2\n", last_timestamp, now));
+	update_from_midi (nframes, now);
 
 	/* no timecode ever, or no timecode for 1/4 second ? conclude that its stopped */
 
 	if (!last_timestamp || (now > last_timestamp && now - last_timestamp > ENGINE->sample_rate() / 4)) {
-		_speed = 0;
+		_speed = 0.0;
 		DEBUG_TRACE (DEBUG::MidiClock, "No MIDI Clock messages received for some time, stopping!\n");
 		return;
 	}
 
-	// calculate speed
-	_speed = ((t1 - t0) * ENGINE->sample_rate()) / one_ppqn_in_samples;
+	if (_running) {
 
-	// provide a 0.1% deadzone to lock the speed
-	if (fabs (_speed - 1.0) <= 0.001) {
-		_speed = 1.0;
+		// calculate speed	
+		_speed = ((t1 - t0) * ENGINE->sample_rate()) / one_ppqn_in_samples;
+		DEBUG_TRACE (DEBUG::MidiClock, string_compose ("speed from elapsed %1 vs. %2\n", (t1 - t0) * ENGINE->sample_rate(), one_ppqn_in_samples));
+
+		// provide a 0.1% deadzone to lock the speed
+
+		if (fabs (_speed - 1.0) <= 0.001) {
+			_speed = 1.0;
+		}
+
+	} else {
+		_speed = 0.0;
 	}
 
 	if (session_pos) {
@@ -174,19 +182,14 @@ MIDIClock_TransportMaster::calculate_filter_coefficients()
 void
 MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t timestamp)
 {
-	// some pieces of hardware send MIDI Clock all the time
-	if (!_running) {
-		return;
-	}
-
 	pframes_t cycle_offset = timestamp - ENGINE->sample_time_at_cycle_start();
 
-	calculate_one_ppqn_in_samples_at(should_be_position);
+	calculate_one_ppqn_in_samples_at (should_be_position);
 
 	samplepos_t elapsed_since_start = timestamp - first_timestamp;
 	double error = 0;
 
-	if (starting() || last_timestamp == 0) {
+	if (last_timestamp == 0) {
 		midi_clock_count = 0;
 
 		first_timestamp = timestamp;
@@ -202,8 +205,6 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 		t0 = double(elapsed_since_start) / double(ENGINE->sample_rate());
 		t1 = t0 + e2;
 
-		// let ardour go after first MIDI Clock Event
-		_running = true;
 	} else {
 		midi_clock_count++;
 		should_be_position += one_ppqn_in_samples;
@@ -221,10 +222,16 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 		t0 = t1;
 		t1 += b * e + e2;
 		e2 += c * e;
+
+		// need at least two clock events to compute speed
+		if (!_running) {
+			DEBUG_TRACE (DEBUG::MidiClock, string_compose ("start mclock running with speed = %1\n", ((t1 - t0) * ENGINE->sample_rate()) / one_ppqn_in_samples));
+			_running = true;
+		}
 	}
 
 	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("clock #%1 @ %2 should-be %3 transport %4 error %5 appspeed %6 "
-						       "read-delta %7 should-be delta %8 t1-t0 %9 t0 %10 t1 %11 framerate %12 engine %13\n",
+						       "read-delta %7 should-be delta %8 t1-t0 %9 t0 %10 t1 %11 framerate %12 engine %13 running %14\n",
 						       midi_clock_count,                                          // #
 						       elapsed_since_start,                                       // @
 						       should_be_position,                                        // should-be
@@ -237,7 +244,8 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 						       t0 * ENGINE->sample_rate(),                                // t0
 						       t1 * ENGINE->sample_rate(),                                // t1
 						       ENGINE->sample_rate(),                                      // framerate
-						       ENGINE->sample_time()
+	                                               ENGINE->sample_time(),
+	                                               _running
 
 	));
 
@@ -265,7 +273,7 @@ MIDIClock_TransportMaster::reset ()
 	_speed = 0;
 	last_timestamp = 0;
 
-	_running = true;
+	_running = false;
 	_current_delta = 0;
 }
 
