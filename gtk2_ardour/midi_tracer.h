@@ -56,7 +56,7 @@ private:
 	Gtk::SpinButton line_count_spinner;
 	Gtk::Label line_count_label;
 	Gtk::HBox line_count_box;
-	struct timeval _last_receipt;
+	MIDI::samplecnt_t _last_receipt;
 
 	bool autoscroll;
 	bool show_hex;
@@ -72,7 +72,7 @@ private:
 	Pool buffer_pool;
 	static const size_t buffer_size = 256;
 
-	void tracer (MIDI::Parser&, MIDI::byte*, size_t);
+	void tracer (MIDI::Parser&, MIDI::byte*, size_t, MIDI::samplecnt_t);
 	void update ();
 
 	Gtk::CheckButton autoscroll_button;
