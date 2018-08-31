@@ -54,6 +54,7 @@ MIDIClock_TransportMaster::MIDIClock_TransportMaster (std::string const & name, 
 	, midi_clock_count (0)
 	, _speed (0)
 	, _running (false)
+	, _bpm (0)
 {
 	if ((_port = create_midi_port (string_compose ("%1 in", name))) == 0) {
 		throw failed_constructor();
@@ -96,7 +97,11 @@ MIDIClock_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, 
 		return true;
 	}
 
-	speed = _speed;
+	if (fabs (_speed - 1.0) < 0.001) {
+		speed = 1.0;
+	} else {
+		speed = _speed;
+	}
 
 	pos = should_be_position;
 	pos += (now - last_timestamp) * _speed;
@@ -117,24 +122,18 @@ MIDIClock_TransportMaster::pre_process (pframes_t nframes, samplepos_t now, boos
 
 	if (!last_timestamp || (now > last_timestamp && now - last_timestamp > ENGINE->sample_rate() / 4)) {
 		_speed = 0.0;
+		_bpm = 0.0;
+		last_timestamp = 0;
+		_running = false;
+
 		DEBUG_TRACE (DEBUG::MidiClock, "No MIDI Clock messages received for some time, stopping!\n");
 		return;
 	}
 
-	if (_running) {
-
-		// calculate speed	
-		_speed = ((t1 - t0) * ENGINE->sample_rate()) / one_ppqn_in_samples;
-		DEBUG_TRACE (DEBUG::MidiClock, string_compose ("speed from elapsed %1 vs. %2\n", (t1 - t0) * ENGINE->sample_rate(), one_ppqn_in_samples));
-
-		// provide a 0.1% deadzone to lock the speed
-
-		if (fabs (_speed - 1.0) <= 0.001) {
-			_speed = 1.0;
+	if (!_running) {
+		if (session_pos) {
+			should_be_position = *session_pos;
 		}
-
-	} else {
-		_speed = 0.0;
 	}
 
 	if (session_pos) {
@@ -182,8 +181,6 @@ MIDIClock_TransportMaster::calculate_filter_coefficients()
 void
 MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t timestamp)
 {
-	pframes_t cycle_offset = timestamp - ENGINE->sample_time_at_cycle_start();
-
 	calculate_one_ppqn_in_samples_at (should_be_position);
 
 	samplepos_t elapsed_since_start = timestamp - first_timestamp;
@@ -210,12 +207,8 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 		should_be_position += one_ppqn_in_samples;
 		calculate_filter_coefficients();
 
-		// calculate loop error
-		// we use _session->transport_sample() instead of t1 here
-		// because t1 is used to calculate the transport speed,
-		// so the loop will compensate for accumulating rounding errors
-		error = (double(should_be_position) - (double(_session->transport_sample()) + double(cycle_offset)));
-		const double e = error / double(ENGINE->sample_rate());
+		error = should_be_position - _session->audible_sample();
+		const double e = error / ENGINE->sample_rate();
 		_current_delta = error;
 
 		// update DLL
@@ -223,7 +216,15 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 		t1 += b * e + e2;
 		e2 += c * e;
 
+		const double predicted_clock_interval_in_samples = (t1 - t0) * ENGINE->sample_rate();
+		const double predicted_quarter_interval_in_samples = predicted_clock_interval_in_samples * 24.0;
+		_speed = predicted_clock_interval_in_samples / one_ppqn_in_samples;
+		_bpm = (ENGINE->sample_rate() * 60.0) / predicted_quarter_interval_in_samples;
+
+		cerr << "apparent BPM = " << _bpm << " clock interval was " << predicted_clock_interval_in_samples << " p-quarter = " << predicted_quarter_interval_in_samples << endl;
+
 		// need at least two clock events to compute speed
+
 		if (!_running) {
 			DEBUG_TRACE (DEBUG::MidiClock, string_compose ("start mclock running with speed = %1\n", ((t1 - t0) * ENGINE->sample_rate()) / one_ppqn_in_samples));
 			_running = true;

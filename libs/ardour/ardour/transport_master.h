@@ -470,6 +470,7 @@ class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public T
 
 	double _speed;
 	bool _running;
+	double _bpm;
 
 	void reset ();
 	void start (MIDI::Parser& parser, samplepos_t timestamp);
