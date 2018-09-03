@@ -20,10 +20,14 @@
 #ifndef __ardour_gtk_transport_masters_dialog_h__
 #define __ardour_gtk_transport_masters_dialog_h__
 
+#include <vector>
+#include <string>
+
 #include <gtkmm/button.h>
 #include <gtkmm/radiobutton.h>
 #include <gtkmm/label.h>
 #include <gtkmm/table.h>
+#include <gtkmm/treestore.h>
 
 namespace ARDOUR {
 	class TransportMaster;
@@ -45,7 +49,7 @@ class TransportMastersDialog : public ArdourDialog
 
   private:
 
-	struct Row {
+	struct Row : sigc::trackable, PBD::ScopedConnectionList {
 		Gtk::Label label;
 		Gtk::Label type;
 		Gtk::Label format;
@@ -54,11 +58,32 @@ class TransportMastersDialog : public ArdourDialog
 		Gtk::Label delta;
 		Gtk::CheckButton collect_button;
 		Gtk::RadioButton use_button;
+		Gtk::ComboBoxText port_combo;
+
 		boost::shared_ptr<ARDOUR::TransportMaster> tm;
 
 		void update (ARDOUR::Session*, ARDOUR::samplepos_t);
 
-		Row () {};
+		Row ();
+
+		struct PortColumns : public Gtk::TreeModel::ColumnRecord {
+			PortColumns() {
+				add (short_name);
+				add (full_name);
+			}
+			Gtk::TreeModelColumn<std::string> short_name;
+			Gtk::TreeModelColumn<std::string> full_name;
+		};
+
+		PortColumns port_columns;
+
+		void populate_port_combo ();
+		Glib::RefPtr<Gtk::ListStore> build_port_list (std::vector<std::string> const & ports);
+
+		void port_changed ();
+		void connection_handler ();
+
+		bool ignore_active_change;
 	};
 
 	std::vector<Row*> rows;
