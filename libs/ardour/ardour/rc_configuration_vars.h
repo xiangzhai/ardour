@@ -48,6 +48,7 @@ CONFIG_VARIABLE (TracksAutoNamingRule, tracks_auto_naming, "tracks-auto-naming",
 /* Transport Masters (all) */
 
 CONFIG_VARIABLE (bool, transport_masters_just_roll_when_sync_lost, "transport-masters-just-roll-when-sync-lost", false)
+CONFIG_VARIABLE (bool, midi_clock_sets_tempo, "midi-clock-sets-tempo", true)
 
 /* MIDI and MIDI related */
 
