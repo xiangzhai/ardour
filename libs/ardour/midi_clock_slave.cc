@@ -56,6 +56,8 @@ MIDIClock_TransportMaster::MIDIClock_TransportMaster (std::string const & name, 
 	, _running (false)
 	, _bpm (0)
 {
+	accumulator_reset ();
+
 	if ((_port = create_midi_port (string_compose ("%1 in", name))) == 0) {
 		throw failed_constructor();
 	}
@@ -64,6 +66,12 @@ MIDIClock_TransportMaster::MIDIClock_TransportMaster (std::string const & name, 
 MIDIClock_TransportMaster::~MIDIClock_TransportMaster()
 {
 	port_connections.drop_connections ();
+}
+
+void
+MIDIClock_TransportMaster::init ()
+{
+	accumulator_reset ();
 }
 
 void
@@ -91,10 +99,7 @@ bool
 MIDIClock_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, samplepos_t now)
 {
 	if (!_running) {
-		speed = 0.0;
-		pos   = should_be_position;
-		_current_delta = 0;
-		return true;
+		return false;
 	}
 
 	if (fabs (_speed - 1.0) < 0.001) {
@@ -118,22 +123,23 @@ MIDIClock_TransportMaster::pre_process (pframes_t nframes, samplepos_t now, boos
 
 	update_from_midi (nframes, now);
 
-	/* no timecode ever, or no timecode for 1/4 second ? conclude that its stopped */
+	/* no clock messages ever, or no clock messages for 1/4 second ? conclude that its stopped */
 
-	if (!last_timestamp || (now > last_timestamp && now - last_timestamp > ENGINE->sample_rate() / 4)) {
+	if (!last_timestamp || (now > last_timestamp && ((now - last_timestamp) > (ENGINE->sample_rate() / 4)))) {
 		_speed = 0.0;
 		_bpm = 0.0;
 		last_timestamp = 0;
 		_running = false;
+		_current_delta = 0;
+		midi_clock_count = 0;
 
 		DEBUG_TRACE (DEBUG::MidiClock, "No MIDI Clock messages received for some time, stopping!\n");
 		return;
 	}
 
-	if (!_running) {
-		if (session_pos) {
-			should_be_position = *session_pos;
-		}
+	if (!_running && midi_clock_count == 0 && session_pos) {
+		should_be_position = *session_pos;
+		DEBUG_TRACE (DEBUG::MidiClock, string_compose ("set sbp to %1\n", should_be_position));
 	}
 
 	if (session_pos) {
@@ -169,66 +175,141 @@ MIDIClock_TransportMaster::calculate_song_position(uint16_t song_position_in_six
 }
 
 void
-MIDIClock_TransportMaster::calculate_filter_coefficients()
+MIDIClock_TransportMaster::calculate_filter_coefficients (double qpm)
 {
-	const double  bandwidth = (2.0 / 60.0); // 1 BpM = 1 / 60 Hz
-	// omega = 2 * PI * Bandwidth / MIDI clock sample frequency in Hz
-	const double omega = 2.0 * M_PI * bandwidth * one_ppqn_in_samples / ENGINE->sample_rate();
-	b = 1.4142135623730950488 * omega;
+	/* Paul says: I don't understand this computation of bandwidth
+	*/
+
+	const double bandwidth = 2.0 / qpm;
+
+	/* Frequency of the clock messages is ENGINE->sample_rate() / * one_ppqn_in_samples, per second or in Hz */
+	const double freq = (double) ENGINE->sample_rate() / one_ppqn_in_samples;
+
+	const double omega = 2.0 * M_PI * bandwidth / freq;
+	b = 1.4142135623730950488 * omega; // sqrt (2.0) * omega
 	c = omega * omega;
+
+	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("DLL coefficients: bw:%1 omega:%2 b:%3 c:%4\n", bandwidth, omega, b, c));
+}
+
+
+void
+MIDIClock_TransportMaster::accumulator_reset ()
+{
+	accumulator_size = 0;
+	accumulator_index = 0;
+}
+
+double
+MIDIClock_TransportMaster::accumulator_average()
+{
+	double tot = 0;
+
+	for (int n = 0; n < accumulator_size; ++n) {
+		tot += accumulator[n];
+	}
+	return tot / accumulator_size;
 }
 
 void
 MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t timestamp)
 {
+	samplepos_t elapsed_since_start = timestamp - first_timestamp;
+	double e = 0;
+
 	calculate_one_ppqn_in_samples_at (should_be_position);
 
-	samplepos_t elapsed_since_start = timestamp - first_timestamp;
-	double error = 0;
-
-	if (last_timestamp == 0) {
-		midi_clock_count = 0;
+	if (midi_clock_count == 0) {
+		/* second 0xf8 message after start/reset has arrived */
 
 		first_timestamp = timestamp;
-		elapsed_since_start = should_be_position;
+		last_timestamp = timestamp;
 
 		DEBUG_TRACE (DEBUG::MidiClock, string_compose ("first clock message after start received @ %1\n", timestamp));
 
-		// calculate filter coefficients
-		calculate_filter_coefficients();
+		midi_clock_count++;
+		if (!Config->get_midi_clock_sets_tempo()) {
+			should_be_position += one_ppqn_in_samples;
+		}
 
-		// initialize DLL
-		e2 = double(one_ppqn_in_samples) / double(ENGINE->sample_rate());
-		t0 = double(elapsed_since_start) / double(ENGINE->sample_rate());
-		t1 = t0 + e2;
+	} else if (midi_clock_count == 1) {
 
-	} else {
+		/* second 0xf8 message has arrived. we can now estimate QPM
+		 * (quarters per minute, and fully initialize the DLL
+		 */
+
+		e = timestamp - last_timestamp;
+
+		accumulator[accumulator_index] = e;
+		accumulator_index++;
+		accumulator_index %= accumulator_capacity;
+
+		if (accumulator_size < accumulator_capacity) {
+			accumulator_size++;
+		}
+
+		const samplecnt_t samples_per_quarter = e * 24;
+		const double qpm = (ENGINE->sample_rate() * 60.0) / samples_per_quarter;
+
+		calculate_filter_coefficients (qpm);
+
+		/* finish DLL initialization */
+
+		t0 = timestamp;
+		e2 = e;
+		t1 = t0 + e2; /* timestamp we predict for the next 0xf8 clock message */
+
 		midi_clock_count++;
 		should_be_position += one_ppqn_in_samples;
-		calculate_filter_coefficients();
 
-		error = should_be_position - _session->audible_sample();
-		const double e = error / ENGINE->sample_rate();
-		_current_delta = error;
+	} else {
 
-		// update DLL
+		/* 3rd or later MIDI clock message. We can now compute actual
+		 * speed (and tempo) with the DLL
+		 */
+
+		e = timestamp - t1; // error between actual time of arrival of clock message and our predicted time
 		t0 = t1;
 		t1 += b * e + e2;
 		e2 += c * e;
 
-		const double predicted_clock_interval_in_samples = (t1 - t0) * ENGINE->sample_rate();
-		const double predicted_quarter_interval_in_samples = predicted_clock_interval_in_samples * 24.0;
-		_speed = predicted_clock_interval_in_samples / one_ppqn_in_samples;
-		_bpm = (ENGINE->sample_rate() * 60.0) / predicted_quarter_interval_in_samples;
+		const double elapsed = timestamp - last_timestamp;
+		const double current = accumulator_average();
+		if (fabs (elapsed - current) > (0.20 * current)) {
+			accumulator_reset ();
+		}
 
-		cerr << "apparent BPM = " << _bpm << " clock interval was " << predicted_clock_interval_in_samples << " p-quarter = " << predicted_quarter_interval_in_samples << endl;
+		accumulator[accumulator_index] = timestamp - last_timestamp;
+		accumulator_index++;
+		accumulator_index %= accumulator_capacity;
+		if (accumulator_size < accumulator_capacity) {
+			accumulator_size++;
+		}
+
+		const samplecnt_t instantaneous_samples_per_quarter = accumulator_average () * 24;
+		const double instantaneous_qpm = (ENGINE->sample_rate() * 60.0) / instantaneous_samples_per_quarter;
+
+		calculate_filter_coefficients (instantaneous_qpm);
+
+		const double predicted_clock_interval_in_samples = (t1 - t0);
+
+		/* _speed is relative to session tempo map */
+
+		_speed = predicted_clock_interval_in_samples / one_ppqn_in_samples;
+
+		/* _bpm (really, _qpm) is absolute */
+
+		_bpm = instantaneous_qpm;
 
 		// need at least two clock events to compute speed
 
 		if (!_running) {
-			DEBUG_TRACE (DEBUG::MidiClock, string_compose ("start mclock running with speed = %1\n", ((t1 - t0) * ENGINE->sample_rate()) / one_ppqn_in_samples));
+			DEBUG_TRACE (DEBUG::MidiClock, string_compose ("start mclock running with speed = %1\n", (t1 - t0) / one_ppqn_in_samples));
 			_running = true;
 		}
+
+		midi_clock_count++;
+		should_be_position += one_ppqn_in_samples;
 	}
 
 	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("clock #%1 @ %2 should-be %3 transport %4 error %5 appspeed %6 "
@@ -237,13 +318,13 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 						       elapsed_since_start,                                       // @
 						       should_be_position,                                        // should-be
 						       _session->transport_sample(),                                // transport
-						       error,                                                     // error
-						       ((t1 - t0) * ENGINE->sample_rate()) / one_ppqn_in_samples, // appspeed
+	                                               e,                                                     // error
+						       (t1 - t0) / one_ppqn_in_samples, // appspeed
 						       timestamp - last_timestamp,                                // read delta
 						       one_ppqn_in_samples,                                        // should-be delta
-						       (t1 - t0) * ENGINE->sample_rate(),                         // t1-t0
-						       t0 * ENGINE->sample_rate(),                                // t0
-						       t1 * ENGINE->sample_rate(),                                // t1
+	                                               (t1 - t0),                         // t1-t0
+	                                               t0,                                // t0
+						       t1,                                // t1
 						       ENGINE->sample_rate(),                                      // framerate
 	                                               ENGINE->sample_time(),
 	                                               _running

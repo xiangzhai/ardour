@@ -135,7 +135,9 @@ TransportMasterManager::pre_process_transport_masters (pframes_t nframes, sample
 
 	if (Config->get_run_all_transport_masters_always()) {
 		for (TransportMasters::iterator tm = _transport_masters.begin(); tm != _transport_masters.end(); ++tm) {
-			(*tm)->pre_process (nframes, now, session_pos);
+			if ((*tm)->check_collect()) {
+				(*tm)->pre_process (nframes, now, session_pos);
+			}
 		}
 	}
 

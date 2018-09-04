@@ -223,12 +223,23 @@ class LIBARDOUR_API TransportMaster {
 
 	boost::shared_ptr<Port> port() const { return _port; }
 
+	bool check_collect();
+	virtual void set_collect (bool);
+
+	/* called whenever the manager starts collecting (processing) this
+	   transport master. Typically will re-initialize any state used to
+	   deal with incoming data.
+	*/
+	virtual void init() = 0;
+
   protected:
 	SyncSource      _type;
 	std::string     _name;
 	Session*        _session;
 	bool            _connected;
 	sampleoffset_t  _current_delta;
+	bool            _collect;
+	bool            _pending_collect;
 
 	/* DLL - chase incoming data */
 
@@ -309,6 +320,7 @@ class LIBARDOUR_API MTC_TransportMaster : public TimecodeTransportMaster, public
 	samplecnt_t resolution () const;
 	bool requires_seekahead () const { return false; }
 	samplecnt_t seekahead_distance() const;
+	void init ();
 
         Timecode::TimecodeFormat apparent_timecode_format() const;
         std::string position_string() const;
@@ -376,6 +388,7 @@ public:
 	samplecnt_t resolution () const;
 	bool requires_seekahead () const { return false; }
 	samplecnt_t seekahead_distance () const { return 0; }
+	void init ();
 
 	Timecode::TimecodeFormat apparent_timecode_format() const;
 	std::string position_string() const;
@@ -442,6 +455,7 @@ class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public T
 
 	samplecnt_t resolution () const;
 	bool requires_seekahead () const { return false; }
+	void init ();
 
 	std::string position_string() const;
 	std::string delta_string() const;
@@ -480,9 +494,17 @@ class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public T
 	// we can't use continue because it is a C++ keyword
 	void calculate_one_ppqn_in_samples_at(samplepos_t time);
 	samplepos_t calculate_song_position(uint16_t song_position_in_sixteenth_notes);
-	void calculate_filter_coefficients();
+	void calculate_filter_coefficients (double qpm);
 	void update_midi_clock (MIDI::Parser& parser, samplepos_t timestamp);
 	void read_current (SafeTime *) const;
+
+	static const int accumulator_capacity = 10;
+	double accumulator[accumulator_capacity];
+	int accumulator_index;
+	int accumulator_size;
+
+	void accumulator_reset ();
+	double accumulator_average();
 };
 
 class LIBARDOUR_API Engine_TransportMaster : public TransportMaster
@@ -500,7 +522,7 @@ class LIBARDOUR_API Engine_TransportMaster : public TransportMaster
 	samplecnt_t resolution () const { return 1; }
 	bool requires_seekahead () const { return false; }
 	bool sample_clock_synced() const { return true; }
-
+	void init ();
 
 	std::string position_string() const;
 	std::string delta_string() const;

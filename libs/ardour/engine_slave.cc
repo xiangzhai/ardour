@@ -40,6 +40,11 @@ Engine_TransportMaster::~Engine_TransportMaster ()
 {
 }
 
+void
+Engine_TransportMaster::init ()
+{
+}
+
 bool
 Engine_TransportMaster::locked() const
 {

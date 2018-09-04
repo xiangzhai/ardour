@@ -75,6 +75,11 @@ LTC_TransportMaster::LTC_TransportMaster (std::string const & name)
 }
 
 void
+LTC_TransportMaster::init ()
+{
+}
+
+void
 LTC_TransportMaster::set_session (Session *s)
 {
 	config_connection.disconnect ();
@@ -599,7 +604,7 @@ LTC_TransportMaster::apparent_timecode_format () const
 std::string
 LTC_TransportMaster::position_string() const
 {
-	if (last_timestamp == 0) {
+	if (!_collect || last_timestamp == 0) {
 		return " --:--:--:--";
 	}
 	return Timecode::timecode_format_time(timecode);
@@ -609,14 +614,16 @@ std::string
 LTC_TransportMaster::delta_string() const
 {
 	char delta[80];
-	if (last_timestamp == 0) {
-		snprintf(delta, sizeof(delta), "\u2012\u2012\u2012\u2012");
+
+	if (!_collect || last_timestamp == 0) {
+		snprintf (delta, sizeof(delta), "\u2012\u2012\u2012\u2012");
 	} else if ((monotonic_cnt - last_timestamp) > 2 * samples_per_ltc_frame) {
-		snprintf(delta, sizeof(delta), "%s", _("flywheel"));
+		snprintf (delta, sizeof(delta), "%s", _("flywheel"));
 	} else {
-		snprintf(delta, sizeof(delta), "\u0394<span foreground=\"%s\" face=\"monospace\" >%s%s%lld</span>sm",
+		snprintf (delta, sizeof(delta), "\u0394<span foreground=\"%s\" face=\"monospace\" >%s%s%lld</span>sm",
 				sync_lock_broken ? "red" : "green",
 				LEADINGZERO(::llabs(_current_delta)), PLUSMINUS(-_current_delta), ::llabs(_current_delta));
 	}
-	return std::string(delta);
+
+	return delta;
 }

@@ -98,6 +98,11 @@ MTC_TransportMaster::~MTC_TransportMaster()
 }
 
 void
+MTC_TransportMaster::init ()
+{
+}
+
+void
 MTC_TransportMaster::set_session (Session *s)
 {
 	config_connection.disconnect ();

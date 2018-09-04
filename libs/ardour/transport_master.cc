@@ -38,6 +38,7 @@ TransportMaster::TransportMaster (SyncSource t, std::string const & name)
 	, _session (0)
 	, _connected (false)
 	, _current_delta (0)
+	, _collect (true)
 {
 	ARDOUR::AudioEngine::instance()->PortConnectedOrDisconnected.connect_same_thread (port_connection, boost::bind (&TransportMaster::connection_handler, this, _1, _2, _3, _4, _5));
 }
@@ -65,6 +66,31 @@ TransportMaster::connection_handler (boost::weak_ptr<ARDOUR::Port>, std::string 
 	return true;
 }
 
+bool
+TransportMaster::check_collect()
+{
+	if (!_connected) {
+		return false;
+	}
+
+	/* XXX should probably use boost::atomic something or other here */
+
+	if (_pending_collect != _collect) {
+		if (_pending_collect) {
+			init ();
+		}
+		_collect = _pending_collect;
+	}
+
+	return _collect;
+}
+
+void
+TransportMaster::set_collect (bool yn)
+{
+	_pending_collect = yn;
+}
+
 void
 TransportMaster::set_session (Session* s)
 {
@@ -74,6 +100,10 @@ TransportMaster::set_session (Session* s)
 int
 TransportMaster::set_state (XMLNode const & node, int /* version */)
 {
+	if (!node.get_property (X_("collect"), _collect)) {
+		_collect = false;
+	}
+
 	XMLNode* pnode = node.child (X_("Port"));
 
 	if (pnode) {
@@ -100,6 +130,7 @@ TransportMaster::get_state ()
 	XMLNode* node = new XMLNode (state_node_name);
 	node->set_property (X_("type"), _type);
 	node->set_property (X_("name"), _name);
+	node->set_property (X_("collect"), _collect);
 
 
 	if (_port) {
