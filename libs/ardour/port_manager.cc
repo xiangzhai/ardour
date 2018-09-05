@@ -1288,23 +1288,19 @@ PortManager::fill_midi_port_info_locked ()
 		if (!ph) {
 			/* port info saved from some condition where this port
 			 * existed, but no longer does (i.e. device unplugged
-			 * at present)
+			 * at present). We don't remove it from midi_port_info.
 			 */
 			continue;
 		}
 
-		if (!x->second.pretty_name.empty () && x->second.pretty_name != x->first) {
-			/* name set in port info ... propagate */
-			_backend->set_port_property (ph, "http://jackaudio.org/metadata/pretty-name", x->second.pretty_name, string());
-		} else {
-			/* check with backend for pre-existing pretty name */
-			string value;
-			string type;
-			if (0 == _backend->get_port_property (ph,
-			                                      "http://jackaudio.org/metadata/pretty-name",
-			                                      value, type)) {
-				x->second.pretty_name = value;
-			}
+		/* check with backend for pre-existing pretty name */
+		string value;
+		string type;
+
+		if (0 == _backend->get_port_property (ph,
+		                                      "http://jackaudio.org/metadata/pretty-name",
+		                                      value, type)) {
+			x->second.pretty_name = value;
 		}
 	}
 
