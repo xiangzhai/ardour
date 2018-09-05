@@ -57,19 +57,27 @@ TransportMaster::connection_handler (boost::weak_ptr<ARDOUR::Port>, std::string 
 
 	const std::string fqn = ARDOUR::AudioEngine::instance()->make_port_name_non_relative (_port->name());
 
-	if (fqn != name1 && fqn != name2) {
-		/* not our port */
-		return false;
+	if (fqn == name1 || fqn == name2) {
+
+		/* it's about us */
+
+		if (yn) {
+			_connected = true;
+		} else {
+			_connected = false;
+		}
+
+		return true;
 	}
 
-	_connected = yn;
-	return true;
+	return false;
 }
 
 bool
 TransportMaster::check_collect()
 {
 	if (!_connected) {
+		std::cerr << name() << " : not connected\n";
 		return false;
 	}
 

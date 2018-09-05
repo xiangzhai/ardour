@@ -72,6 +72,8 @@ void
 MIDIClock_TransportMaster::init ()
 {
 	accumulator_reset ();
+	midi_clock_count = 0;
+	last_timestamp = 0;
 }
 
 void
