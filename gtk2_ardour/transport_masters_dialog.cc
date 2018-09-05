@@ -143,8 +143,14 @@ TransportMastersDialog::Row::build_port_list (vector<string> const & ports)
 	row[port_columns.short_name] = _("Disconnected");
 
 	for (vector<string>::const_iterator p = ports.begin(); p != ports.end(); ++p) {
+
+		if (AudioEngine::instance()->port_is_mine (*p)) {
+			continue;
+		}
+
 		row = *store->append ();
 		row[port_columns.full_name] = *p;
+
 		std::string pn = ARDOUR::AudioEngine::instance()->get_pretty_name_by_name (*p);
 		if (pn.empty ()) {
 			pn = (*p).substr ((*p).find (':') + 1);
@@ -168,9 +174,9 @@ TransportMastersDialog::Row::populate_port_combo ()
 	vector<string> inputs;
 
 	if (tm->port()->type() == DataType::MIDI) {
-		ARDOUR::AudioEngine::instance()->get_ports ("", ARDOUR::DataType::MIDI, ARDOUR::PortFlags (ARDOUR::IsOutput|ARDOUR::IsTerminal), inputs);
+		ARDOUR::AudioEngine::instance()->get_ports ("", ARDOUR::DataType::MIDI, ARDOUR::PortFlags (ARDOUR::IsOutput), inputs);
 	} else {
-		ARDOUR::AudioEngine::instance()->get_ports ("", ARDOUR::DataType::AUDIO, ARDOUR::PortFlags (ARDOUR::IsOutput|ARDOUR::IsTerminal), inputs);
+		ARDOUR::AudioEngine::instance()->get_ports ("", ARDOUR::DataType::AUDIO, ARDOUR::PortFlags (ARDOUR::IsOutput), inputs);
 	}
 
 	Glib::RefPtr<Gtk::ListStore> input = build_port_list (inputs);
