@@ -192,37 +192,51 @@ PortManager::port_is_physical (const std::string& portname) const
 void
 PortManager::filter_midi_ports (vector<string>& ports, MidiPortFlags include, MidiPortFlags exclude)
 {
+
 	if (!include && !exclude) {
 		return;
 	}
 
-	for (vector<string>::iterator si = ports.begin(); si != ports.end(); ) {
+	{
+		Glib::Threads::Mutex::Lock lm (midi_port_info_mutex);
 
-		PortManager::MidiPortInformation mpi = midi_port_information (*si);
+		fill_midi_port_info_locked ();
 
-		if (mpi.pretty_name.empty()) {
-			/* no information !!! */
+		for (vector<string>::iterator si = ports.begin(); si != ports.end(); ) {
+
+			MidiPortInfo::iterator x = midi_port_info.find (*si);
+
+			if (x == midi_port_info.end()) {
+				++si;
+				continue;
+			}
+
+			MidiPortInformation& mpi (x->second);
+
+			if (mpi.pretty_name.empty()) {
+				/* no information !!! */
+				++si;
+				continue;
+			}
+
+			if (include) {
+				if ((mpi.properties & include) != include) {
+					/* properties do not include requested ones */
+					si = ports.erase (si);
+					continue;
+				}
+			}
+
+			if (exclude) {
+				if ((mpi.properties & exclude)) {
+					/* properties include ones to avoid */
+					si = ports.erase (si);
+					continue;
+				}
+			}
+
 			++si;
-			continue;
 		}
-
-		if (include) {
-			if ((mpi.properties & include) != include) {
-				/* properties do not include requested ones */
-				si = ports.erase (si);
-				continue;
-			}
-		}
-
-		if (exclude) {
-			if ((mpi.properties & exclude)) {
-				/* properties include ones to avoid */
-				si = ports.erase (si);
-				continue;
-			}
-		}
-
-		++si;
 	}
 }
 
