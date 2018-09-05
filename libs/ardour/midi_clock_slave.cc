@@ -230,9 +230,8 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 		DEBUG_TRACE (DEBUG::MidiClock, string_compose ("first clock message after start received @ %1\n", timestamp));
 
 		midi_clock_count++;
-		if (!Config->get_midi_clock_sets_tempo()) {
-			should_be_position += one_ppqn_in_samples;
-		}
+
+		should_be_position += one_ppqn_in_samples;
 
 	} else if (midi_clock_count == 1) {
 
@@ -277,6 +276,11 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 
 		const double elapsed = timestamp - last_timestamp;
 		const double current = accumulator_average();
+
+		/* detect substantial changes in apparent tempo (defined as a
+		 * change of more than 20% of the current tempo.
+		 */
+
 		if (fabs (elapsed - current) > (0.20 * current)) {
 			accumulator_reset ();
 		}
@@ -412,7 +416,7 @@ MIDIClock_TransportMaster::position (Parser& /*parser*/, MIDI::byte* message, si
 
 	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("Song Position: %1 samples: %2\n", position_in_sixteenth_notes, position_in_samples));
 
-	should_be_position  = position_in_samples;
+	should_be_position = position_in_samples;
 	last_timestamp = 0;
 
 }
