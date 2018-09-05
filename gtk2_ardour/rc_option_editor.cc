@@ -2109,14 +2109,7 @@ MidiPortOptions::pretty_name_edit (std::string const & path, string const & new_
 		return;
 	}
 
-	boost::shared_ptr<ARDOUR::AudioBackend> backend = ARDOUR::AudioEngine::instance()->current_backend();
-	if (backend) {
-		ARDOUR::PortEngine::PortHandle ph = backend->get_port_by_name ((*iter)[midi_port_columns.name]);
-		if (ph) {
-			backend->set_port_property (ph, "http://jackaudio.org/metadata/pretty-name", new_text, "");
-			(*iter)[midi_port_columns.pretty_name] = new_text;
-		}
-	}
+	AudioEngine::instance()->set_midi_port_pretty_name ((*iter)[midi_port_columns.name], new_text);
 }
 
 /*============*/
