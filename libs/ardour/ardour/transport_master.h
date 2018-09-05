@@ -246,10 +246,10 @@ class LIBARDOUR_API TransportMaster {
 	int    transport_direction;
 	int    dll_initstate;
 
-	double t0; ///< time at the beginning of the MTC quater sample
-	double t1; ///< calculated end of the MTC quater sample
-	double e2; ///< second order loop error
-	double b, c; ///< DLL filter coefficients
+	double t0;
+	double t1;
+	double e2;
+	double b, c;
 
 	boost::shared_ptr<Port>  _port;
 
