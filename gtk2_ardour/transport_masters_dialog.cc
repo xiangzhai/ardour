@@ -56,6 +56,8 @@ TransportMastersDialog::TransportMastersDialog ()
 
 	table.set_spacings (6);
 
+	TransportMasterManager::instance().CurrentChanged.connect (current_connection, invalidator (*this), boost::bind (&TransportMastersDialog::current_changed, this, _1, _2), gui_context());
+
 	rebuild ();
 }
 
@@ -64,6 +66,12 @@ TransportMastersDialog::~TransportMastersDialog ()
 	for (vector<Row*>::iterator r = rows.begin(); r != rows.end(); ++r) {
 		delete *r;
 	}
+}
+
+void
+TransportMastersDialog::current_changed (boost::shared_ptr<TransportMaster> old_master, boost::shared_ptr<TransportMaster> new_master)
+{
+	cerr << "master changed to " << new_master << endl;
 }
 
 void
@@ -119,12 +127,23 @@ TransportMastersDialog::rebuild ()
 		r->port_combo.signal_changed().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::port_changed));
 		ARDOUR::AudioEngine::instance()->PortRegisteredOrUnregistered.connect (*r, invalidator (*this), boost::bind (&TransportMastersDialog::Row::connection_handler, r), gui_context());
 
+		r->use_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::use_changed));
+
 	}
 }
 
 TransportMastersDialog::Row::Row ()
 	: ignore_active_change (false)
 {
+}
+
+void
+
+TransportMastersDialog::Row::use_changed ()
+{
+	if (use_button.get_active()) {
+		Config->set_sync_source (tm->type());
+	}
 }
 
 void

@@ -80,6 +80,7 @@ class TransportMastersDialog : public ArdourDialog
 		void populate_port_combo ();
 		Glib::RefPtr<Gtk::ListStore> build_port_list (std::vector<std::string> const & ports);
 
+		void use_changed ();
 		void port_changed ();
 		void connection_handler ();
 
@@ -100,8 +101,11 @@ class TransportMastersDialog : public ArdourDialog
 	Gtk::Label col8_title;
 
 	sigc::connection update_connection;
+	PBD::ScopedConnection current_connection;
 
 	void rebuild ();
+	void current_changed (boost::shared_ptr<ARDOUR::TransportMaster> old_master, boost::shared_ptr<ARDOUR::TransportMaster> new_master);
+
 };
 
 #endif /* __ardour_gtk_transport_masters_dialog_h__ */
