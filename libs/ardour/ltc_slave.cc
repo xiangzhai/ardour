@@ -191,8 +191,6 @@ LTC_TransportMaster::reset (bool with_ts)
 	ltc_speed = 0;
 	sync_lock_broken = false;
 	monotonic_cnt = 0;
-
-	ActiveChanged (false); /* EMIT SIGNAL */
 }
 
 void
@@ -523,7 +521,6 @@ LTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now, boost::opt
 
 	} else if (ltc_speed != 0) {
 
-		ActiveChanged (true); /* EMIT SIGNAL */
 	}
 
 	DEBUG_TRACE (DEBUG::LTC, string_compose ("pre-process with audio clock time: %1\n", now));
@@ -569,7 +566,7 @@ LTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now, boost::opt
 		DEBUG_TRACE (DEBUG::LTC, "flywheel timeout\n");
 		reset();
 		/* don't change position from last known */
-		ActiveChanged (false); /* EMIT SIGNAL */
+
 		return;
 	}
 

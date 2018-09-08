@@ -298,8 +298,6 @@ class LIBARDOUR_API TimecodeTransportMaster : public TransportMaster {
 
 	samplepos_t        timecode_offset;
 	bool              timecode_negative_offset;
-
-	PBD::Signal1<void, bool> ActiveChanged;
 };
 
 class LIBARDOUR_API MTC_TransportMaster : public TimecodeTransportMaster, public TransportMasterViaMIDI {

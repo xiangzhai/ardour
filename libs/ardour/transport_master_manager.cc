@@ -308,8 +308,20 @@ TransportMasterManager::init_transport_master_dll (double speed, samplepos_t pos
 int
 TransportMasterManager::add (SyncSource type, std::string const & name)
 {
-	Glib::Threads::RWLock::WriterLock lm (lock);
-	return add_locked (TransportMaster::factory (type, name));
+	int ret = 0;
+	boost::shared_ptr<TransportMaster> tm;
+
+	{
+		Glib::Threads::RWLock::WriterLock lm (lock);
+		tm = TransportMaster::factory (type, name);
+		ret = add_locked (tm);
+	}
+
+	if (ret == 0) {
+		Added (tm);
+	}
+
+	return ret;
 }
 
 int
@@ -333,23 +345,27 @@ TransportMasterManager::add_locked (boost::shared_ptr<TransportMaster> tm)
 int
 TransportMasterManager::remove (std::string const & name)
 {
-	Glib::Threads::RWLock::WriterLock lm (lock);
+	int ret = -1;
+	boost::shared_ptr<TransportMaster> tm;
 
-	for (TransportMasters::iterator t = _transport_masters.begin(); t != _transport_masters.end(); ++t) {
-		if ((*t)->name() == name) {
-			_transport_masters.erase (t);
-			return 0;
+	{
+		Glib::Threads::RWLock::WriterLock lm (lock);
+
+		for (TransportMasters::iterator t = _transport_masters.begin(); t != _transport_masters.end(); ++t) {
+			if ((*t)->name() == name) {
+				tm = *t;
+				_transport_masters.erase (t);
+				ret = 0;
+				break;
+			}
 		}
 	}
 
-	return -1;
-}
+	if (ret == 0 && tm) {
+		Removed (tm);
+	}
 
-int
-TransportMasterManager::set_current (boost::shared_ptr<TransportMaster> c)
-{
-	Glib::Threads::RWLock::WriterLock lm (lock);
-	return set_current_locked (c);
+	return -1;
 }
 
 int
@@ -372,40 +388,82 @@ TransportMasterManager::set_current_locked (boost::shared_ptr<TransportMaster> c
 }
 
 int
+TransportMasterManager::set_current (boost::shared_ptr<TransportMaster> c)
+{
+	int ret = -1;
+	boost::shared_ptr<TransportMaster> old (_current_master);
+
+	{
+		Glib::Threads::RWLock::WriterLock lm (lock);
+		ret = set_current_locked (c);
+	}
+
+	if (ret == 0) {
+		CurrentChanged (old, _current_master); // EMIT SIGNAL
+	}
+
+	return ret;
+}
+
+int
 TransportMasterManager::set_current (SyncSource ss)
 {
-	Glib::Threads::RWLock::WriterLock lm (lock);
+	int ret = -1;
+	boost::shared_ptr<TransportMaster> old (_current_master);
 
-	for (TransportMasters::iterator t = _transport_masters.begin(); t != _transport_masters.end(); ++t) {
-		if ((*t)->type() == ss) {
-			return set_current_locked (*t);
+	{
+		Glib::Threads::RWLock::WriterLock lm (lock);
+
+		for (TransportMasters::iterator t = _transport_masters.begin(); t != _transport_masters.end(); ++t) {
+			if ((*t)->type() == ss) {
+				ret = set_current_locked (*t);
+				break;
+			}
 		}
 	}
 
-	return -1;
+	if (ret == 0) {
+		CurrentChanged (old, _current_master); // EMIT SIGNAL
+	}
+
+	return ret;
 }
 
 
 int
 TransportMasterManager::set_current (std::string const & str)
 {
-	Glib::Threads::RWLock::WriterLock lm (lock);
+	int ret = -1;
+	boost::shared_ptr<TransportMaster> old (_current_master);
 
-	for (TransportMasters::iterator t = _transport_masters.begin(); t != _transport_masters.end(); ++t) {
-		if ((*t)->name() == str) {
-			return set_current_locked (*t);
+	{
+		Glib::Threads::RWLock::WriterLock lm (lock);
+
+		for (TransportMasters::iterator t = _transport_masters.begin(); t != _transport_masters.end(); ++t) {
+			if ((*t)->name() == str) {
+				ret = set_current_locked (*t);
+				break;
+			}
 		}
 	}
 
-	return -1;
+	if (ret == 0) {
+		CurrentChanged (old, _current_master); // EMIT SIGNAL
+	}
+
+	return ret;
 }
 
 
 void
 TransportMasterManager::clear ()
 {
-	Glib::Threads::RWLock::WriterLock lm (lock);
-	_transport_masters.clear ();
+	{
+		Glib::Threads::RWLock::WriterLock lm (lock);
+		_transport_masters.clear ();
+	}
+
+	Removed (boost::shared_ptr<TransportMaster>());
 }
 
 int

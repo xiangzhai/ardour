@@ -221,6 +221,7 @@ void
 MTC_TransportMaster::reset (bool with_position)
 {
 	DEBUG_TRACE (DEBUG::MTC, string_compose ("MTC_TransportMaster reset %1\n", with_position?"with position":"without position"));
+
 	if (with_position) {
 		last_inbound_frame = 0;
 		current.guard1++;
@@ -239,7 +240,7 @@ MTC_TransportMaster::reset (bool with_position)
 	window_begin = 0;
 	window_end = 0;
 	transport_direction = 1;
-	ActiveChanged (false);
+	_current_delta = 0;
 }
 
 void
@@ -496,7 +497,6 @@ MTC_TransportMaster::update_mtc_time (const MIDI::byte *msg, bool was_full, samp
 				first_mtc_timestamp = now;
 				init_mtc_dll(mtc_frame, qtr);
 				mtc_frame_dll = mtc_frame;
-				ActiveChanged (true); // emit signal
 			}
 			current.guard1++;
 			current.position = mtc_frame;
@@ -615,7 +615,6 @@ MTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, sample
 			pos = last.position;
 			_current_delta = 0;
 			queue_reset (false);
-			ActiveChanged (false);
 			DEBUG_TRACE (DEBUG::MTC, string_compose ("MTC not seen for 2 samples - reset pending, pos = %1\n", pos));
 			return false;
 		}

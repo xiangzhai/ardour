@@ -45,6 +45,9 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
 	int remove (std::string const & name);
 	void clear ();
 
+	PBD::Signal1<void,boost::shared_ptr<TransportMaster> > Added;
+	PBD::Signal1<void,boost::shared_ptr<TransportMaster> > Removed; // null argument means "clear"
+
 	double pre_process_transport_masters (pframes_t, samplepos_t session_transport_position);
 
 	double get_current_speed_in_process_context() const { return _master_speed; }
@@ -54,6 +57,8 @@ class LIBARDOUR_API TransportMasterManager : public boost::noncopyable
 	int set_current (boost::shared_ptr<TransportMaster>);
 	int set_current (SyncSource);
 	int set_current (std::string const &);
+
+	PBD::Signal2<void,boost::shared_ptr<TransportMaster>, boost::shared_ptr<TransportMaster> > CurrentChanged;
 
 	int set_state (XMLNode const &, int);
 	XMLNode& get_state();
