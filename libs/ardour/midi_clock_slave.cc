@@ -100,7 +100,9 @@ MIDIClock_TransportMaster::set_session (Session *session)
 bool
 MIDIClock_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, samplepos_t now)
 {
-	if (!_running) {
+	cerr << "mclk running " << _running << endl;
+
+	if (!_running || !_collect) {
 		return false;
 	}
 
@@ -123,7 +125,7 @@ MIDIClock_TransportMaster::pre_process (pframes_t nframes, samplepos_t now, boos
 
 	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("preprocess with lt = %1 @ %2, running ? %3\n", last_timestamp, now, _running));
 
-	update_from_midi (nframes, now);
+	_midi_port->read_and_parse_entire_midi_buffer_with_no_speed_adjustment (nframes, parser, now);
 
 	/* no clock messages ever, or no clock messages for 1/4 second ? conclude that its stopped */
 
@@ -220,6 +222,8 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 	double e = 0;
 
 	calculate_one_ppqn_in_samples_at (should_be_position);
+
+	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("clock count %1, sbp %2\n", midi_clock_count, should_be_position));
 
 	if (midi_clock_count == 0) {
 		/* second 0xf8 message after start/reset has arrived */

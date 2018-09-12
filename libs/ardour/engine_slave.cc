@@ -24,6 +24,7 @@
 
 #include "ardour/audioengine.h"
 #include "ardour/audio_backend.h"
+#include "ardour/session.h"
 #include "ardour/transport_master.h"
 
 using namespace std;
@@ -34,6 +35,7 @@ Engine_TransportMaster::Engine_TransportMaster (AudioEngine& e)
 	, engine (e)
 	, _starting (false)
 {
+	check_backend ();
 }
 
 Engine_TransportMaster::~Engine_TransportMaster ()
@@ -43,6 +45,16 @@ Engine_TransportMaster::~Engine_TransportMaster ()
 void
 Engine_TransportMaster::init ()
 {
+}
+
+void
+Engine_TransportMaster::check_backend()
+{
+	if (AudioEngine::instance()->current_backend_name() == X_("JACK")) {
+		_connected = true;
+	} else {
+		_connected = false;
+	}
 }
 
 bool
@@ -84,11 +96,29 @@ Engine_TransportMaster::speed_and_position (double& sp, samplepos_t& position, s
 std::string
 Engine_TransportMaster::position_string () const
 {
+	if (_session) {
+		return to_string (_session->audible_sample());
+	}
+
 	return std::string();
 }
 
 std::string
 Engine_TransportMaster::delta_string () const
 {
-	return std::string();
+	return string ("0");
+}
+
+bool
+Engine_TransportMaster::allow_request (TransportRequestSource src, TransportRequestType type) const
+{
+	if (_session) {
+		if (_session->config.get_jack_time_master()) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	return true;
 }

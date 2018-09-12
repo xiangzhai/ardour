@@ -225,6 +225,7 @@ class LIBARDOUR_API TransportMaster {
 
 	bool check_collect();
 	virtual void set_collect (bool);
+	bool collect() const { return _collect; }
 
 	/* called whenever the manager starts collecting (processing) this
 	   transport master. Typically will re-initialize any state used to
@@ -232,6 +233,11 @@ class LIBARDOUR_API TransportMaster {
 	*/
 	virtual void init() = 0;
 
+	virtual void check_backend() {}
+	virtual bool allow_request (TransportRequestSource, TransportRequestType) const;
+
+	TransportRequestType request_mask() const { return _request_mask; }
+	void set_request_mask (TransportRequestType);
   protected:
 	SyncSource      _type;
 	std::string     _name;
@@ -240,6 +246,7 @@ class LIBARDOUR_API TransportMaster {
 	sampleoffset_t  _current_delta;
 	bool            _collect;
 	bool            _pending_collect;
+	TransportRequestType _request_mask; /* lists transport requests still accepted when we're in control */
 
 	/* DLL - chase incoming data */
 
@@ -255,6 +262,8 @@ class LIBARDOUR_API TransportMaster {
 
 	PBD::ScopedConnection port_connection;
 	bool connection_handler (boost::weak_ptr<ARDOUR::Port>, std::string name1, boost::weak_ptr<ARDOUR::Port>, std::string name2, bool yn);
+
+	PBD::ScopedConnection backend_connection;
 };
 
 struct LIBARDOUR_API SafeTime {
@@ -286,8 +295,6 @@ class LIBARDOUR_API TransportMasterViaMIDI {
 
 	MIDI::Parser                 parser;
 	boost::shared_ptr<MidiPort> _midi_port;
-
-	void update_from_midi (pframes_t nframes, samplepos_t now);
 };
 
 class LIBARDOUR_API TimecodeTransportMaster : public TransportMaster {
@@ -521,6 +528,8 @@ class LIBARDOUR_API Engine_TransportMaster : public TransportMaster
 	bool requires_seekahead () const { return false; }
 	bool sample_clock_synced() const { return true; }
 	void init ();
+	void check_backend();
+	bool allow_request (TransportRequestSource, TransportRequestType) const;
 
 	std::string position_string() const;
 	std::string delta_string() const;

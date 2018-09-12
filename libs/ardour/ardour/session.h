@@ -1644,7 +1644,7 @@ private:
 
 	int           start_midi_thread ();
 
-	bool should_ignore_transport_request (TransportRequestSource src) const;
+	bool should_ignore_transport_request (TransportRequestSource, TransportRequestType) const;
 
 	void set_play_loop (bool yn, double speed);
 	void unset_play_loop ();

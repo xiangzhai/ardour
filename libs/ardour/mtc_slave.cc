@@ -133,7 +133,7 @@ MTC_TransportMaster::pre_process (pframes_t nframes, samplepos_t now, boost::opt
 {
 	/* Read and parse incoming MIDI */
 
-	update_from_midi (nframes, now);
+	_midi_port->read_and_parse_entire_midi_buffer_with_no_speed_adjustment (nframes, parser, now);
 
 	if (session_pos) {
 		const samplepos_t current_pos = current.position + ((now - current.timestamp) * current.speed);
@@ -593,6 +593,10 @@ bool
 MTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, samplepos_t now)
 {
 	SafeTime last;
+
+	if (!_collect) {
+		return false;
+	}
 
 	read_current (&last);
 

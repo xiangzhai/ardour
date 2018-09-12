@@ -579,6 +579,13 @@ enum TransportRequestSource {
 	TRS_UI,
 };
 
+enum TransportRequestType {
+	TR_Stop   = 0x1,
+	TR_Start  = 0x2,
+	TR_Speed  = 0x4,
+	TR_Locate = 0x8
+};
+
 enum ShuttleBehaviour {
 	Sprung,
 	Wheel

@@ -80,13 +80,13 @@ Session::add_post_transport_work (PostTransportWork ptw)
 }
 
 bool
-Session::should_ignore_transport_request (TransportRequestSource src) const
+Session::should_ignore_transport_request (TransportRequestSource src, TransportRequestType type) const
 {
 	if (config.get_external_sync()) {
-		if (src != TransportMasterManager::instance().current()->request_type()) {
-			return true;
-		} else {
+		if (TransportMasterManager::instance().current()->allow_request (src, type)) {
 			return false;
+		} else {
+			return true;
 		}
 	}
 	return false;
@@ -104,7 +104,7 @@ Session::request_sync_source (boost::shared_ptr<TransportMaster> tm)
 void
 Session::request_transport_speed (double speed, bool as_default, TransportRequestSource origin)
 {
-	if (should_ignore_transport_request (origin)) {
+	if (should_ignore_transport_request (origin, TR_Speed)) {
 		return;
 	}
 	SessionEvent* ev = new SessionEvent (SessionEvent::SetTransportSpeed, SessionEvent::Add, SessionEvent::Immediate, 0, speed);
@@ -120,7 +120,7 @@ Session::request_transport_speed (double speed, bool as_default, TransportReques
 void
 Session::request_transport_speed_nonzero (double speed, bool as_default, TransportRequestSource origin)
 {
-	if (should_ignore_transport_request (origin)) {
+	if (should_ignore_transport_request (origin, TransportRequestType (TR_Speed|TR_Start))) {
 		return;
 	}
 
@@ -134,7 +134,7 @@ Session::request_transport_speed_nonzero (double speed, bool as_default, Transpo
 void
 Session::request_stop (bool abort, bool clear_state, TransportRequestSource origin)
 {
-	if (should_ignore_transport_request (origin)) {
+	if (should_ignore_transport_request (origin, TR_Stop)) {
 		return;
 	}
 
@@ -146,7 +146,7 @@ Session::request_stop (bool abort, bool clear_state, TransportRequestSource orig
 void
 Session::request_locate (samplepos_t target_sample, bool with_roll, TransportRequestSource origin)
 {
-	if (should_ignore_transport_request (origin)) {
+	if (should_ignore_transport_request (origin, TR_Locate)) {
 		return;
 	}
 

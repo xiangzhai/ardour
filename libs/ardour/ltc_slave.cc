@@ -482,6 +482,10 @@ LTC_TransportMaster::process_ltc(samplepos_t const now)
 bool
 LTC_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, samplepos_t now)
 {
+	if (!_collect || last_timestamp == 0) {
+		return false;
+	}
+
 	/* XXX these are not atomics and maybe modified in a thread other other than the one
 	   that is executing this.
 	*/

@@ -25,6 +25,7 @@
 #include "ardour/midi_port.h"
 #include "ardour/session.h"
 #include "ardour/transport_master.h"
+#include "ardour/transport_master_manager.h"
 #include "ardour/utils.h"
 
 using namespace ARDOUR;
@@ -39,8 +40,11 @@ TransportMaster::TransportMaster (SyncSource t, std::string const & name)
 	, _connected (false)
 	, _current_delta (0)
 	, _collect (true)
+	, _pending_collect (true)
+	, _request_mask (TransportRequestType (0))
 {
 	ARDOUR::AudioEngine::instance()->PortConnectedOrDisconnected.connect_same_thread (port_connection, boost::bind (&TransportMaster::connection_handler, this, _1, _2, _3, _4, _5));
+	ARDOUR::AudioEngine::instance()->Running.connect_same_thread (backend_connection, boost::bind (&TransportMaster::check_backend, this));
 }
 
 TransportMaster::~TransportMaster()
@@ -86,7 +90,14 @@ TransportMaster::check_collect()
 	if (_pending_collect != _collect) {
 		if (_pending_collect) {
 			init ();
+		} else {
+			if (TransportMasterManager::instance().current().get() == this) {
+				if (_session) {
+					_session->config.set_external_sync (false);
+				}
+			}
 		}
+		std::cerr << name() << " pc = " << _pending_collect << " c = " << _collect << std::endl;
 		_collect = _pending_collect;
 	}
 
@@ -229,8 +240,14 @@ TransportMasterViaMIDI::create_midi_port (std::string const & port_name)
 	return p;
 }
 
-void
-TransportMasterViaMIDI::update_from_midi (pframes_t nframes, samplepos_t now)
+bool
+TransportMaster::allow_request (TransportRequestSource src, TransportRequestType type) const
 {
-	_midi_port->read_and_parse_entire_midi_buffer_with_no_speed_adjustment (nframes, parser, now);
+	return _request_mask & type;
+}
+
+void
+TransportMaster::set_request_mask (TransportRequestType t)
+{
+	_request_mask = t;
 }
