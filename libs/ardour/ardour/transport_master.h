@@ -175,7 +175,8 @@ class LIBARDOUR_API TransportMaster {
 	 * @return - when returning true, ARDOUR will use transport speed 1.0 no matter what
 	 *           the slave returns
 	 */
-	virtual bool sample_clock_synced() const { return false; }
+	virtual bool sample_clock_synced() const { return _sclock_synced; }
+	virtual void set_sample_clock_synced (bool);
 
 	/**
 	 * @return - current time-delta between engine and sync-source
@@ -247,6 +248,7 @@ class LIBARDOUR_API TransportMaster {
 	bool            _collect;
 	bool            _pending_collect;
 	TransportRequestType _request_mask; /* lists transport requests still accepted when we're in control */
+	bool            _sclock_synced;
 
 	/* DLL - chase incoming data */
 

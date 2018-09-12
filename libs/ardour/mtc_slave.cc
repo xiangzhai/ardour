@@ -74,7 +74,7 @@ MTC_TransportMaster::MTC_TransportMaster (std::string const & name)
 
 	DEBUG_TRACE (DEBUG::Slave, string_compose ("MTC registered %1\n", _port->name()));
 
-	reset (true);
+	init ();
 }
 
 MTC_TransportMaster::~MTC_TransportMaster()
@@ -100,6 +100,7 @@ MTC_TransportMaster::~MTC_TransportMaster()
 void
 MTC_TransportMaster::init ()
 {
+	reset (true);
 }
 
 void

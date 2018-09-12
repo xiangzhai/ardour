@@ -72,11 +72,6 @@ CONFIG_VARIABLE (bool, run_all_transport_masters_always, "run-all-transport-mast
 CONFIG_VARIABLE (bool, use_session_timecode_format, "use-session-timecode-format", true)
 CONFIG_VARIABLE (int, mtc_qf_speed_tolerance, "mtc-qf-speed-tolerance", 5)
 CONFIG_VARIABLE (bool, timecode_sync_frame_rate, "timecode-sync-frame-rate", true)
-#ifdef USE_TRACKS_CODE_FEATURES
-CONFIG_VARIABLE (bool, timecode_source_is_synced, "timecode-source-is-synced", true)
-#else
-CONFIG_VARIABLE (bool, timecode_source_is_synced, "timecode-source-is-synced", false)
-#endif
 CONFIG_VARIABLE (bool, timecode_source_2997, "timecode-source-2997", false)
 #ifdef USE_TRACKS_CODE_FEATURES
 CONFIG_VARIABLE (SyncSource, sync_source, "sync-source", MTC)

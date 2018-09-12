@@ -77,6 +77,7 @@ LTC_TransportMaster::LTC_TransportMaster (std::string const & name)
 void
 LTC_TransportMaster::init ()
 {
+	reset (true);
 }
 
 void

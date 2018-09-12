@@ -100,8 +100,6 @@ MIDIClock_TransportMaster::set_session (Session *session)
 bool
 MIDIClock_TransportMaster::speed_and_position (double& speed, samplepos_t& pos, samplepos_t now)
 {
-	cerr << "mclk running " << _running << endl;
-
 	if (!_running || !_collect) {
 		return false;
 	}

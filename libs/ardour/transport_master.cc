@@ -42,6 +42,7 @@ TransportMaster::TransportMaster (SyncSource t, std::string const & name)
 	, _collect (true)
 	, _pending_collect (true)
 	, _request_mask (TransportRequestType (0))
+	, _sclock_synced (false)
 {
 	ARDOUR::AudioEngine::instance()->PortConnectedOrDisconnected.connect_same_thread (port_connection, boost::bind (&TransportMaster::connection_handler, this, _1, _2, _3, _4, _5));
 	ARDOUR::AudioEngine::instance()->Running.connect_same_thread (backend_connection, boost::bind (&TransportMaster::check_backend, this));
@@ -111,6 +112,12 @@ TransportMaster::set_collect (bool yn)
 }
 
 void
+TransportMaster::set_sample_clock_synced (bool yn)
+{
+	_sclock_synced = yn;
+}
+
+void
 TransportMaster::set_session (Session* s)
 {
 	_session = s;
@@ -121,6 +128,10 @@ TransportMaster::set_state (XMLNode const & node, int /* version */)
 {
 	if (!node.get_property (X_("collect"), _collect)) {
 		_collect = false;
+	}
+
+	if (!node.get_property (X_("clock-synced"), _sclock_synced)) {
+		_sclock_synced = false;
 	}
 
 	XMLNode* pnode = node.child (X_("Port"));
@@ -150,6 +161,7 @@ TransportMaster::get_state ()
 	node->set_property (X_("type"), _type);
 	node->set_property (X_("name"), _name);
 	node->set_property (X_("collect"), _collect);
+	node->set_property (X_("clock-synced"), _sclock_synced);
 
 
 	if (_port) {
