@@ -29,6 +29,10 @@
 #include <gtkmm/table.h>
 #include <gtkmm/treestore.h>
 
+namespace Gtk {
+	class Menu;
+}
+
 namespace ARDOUR {
 	class TransportMaster;
 }
@@ -59,7 +63,10 @@ class TransportMastersDialog : public ArdourDialog
 		Gtk::CheckButton collect_button;
 		Gtk::RadioButton use_button;
 		Gtk::ComboBoxText port_combo;
-		Gtk::Menu request_options;
+		Gtk::CheckButton sclock_synced_button;
+		Gtk::CheckButton fps_299730_button;
+		Gtk::Button request_options;
+		Gtk::Menu* request_option_menu;
 
 		void build_request_options();
 
@@ -86,7 +93,9 @@ class TransportMastersDialog : public ArdourDialog
 		void use_changed ();
 		void collect_changed ();
 		void port_changed ();
+		void sync_changed ();
 		void connection_handler ();
+		bool request_option_press (GdkEventButton*);
 
 		bool ignore_active_change;
 	};
@@ -95,16 +104,7 @@ class TransportMastersDialog : public ArdourDialog
 
 	Gtk::RadioButtonGroup use_button_group;
 	Gtk::Table table;
-	Gtk::Label col1_title;
-	Gtk::Label col2_title;
-	Gtk::Label col3_title;
-	Gtk::Label col4_title;
-	Gtk::Label col5_title;
-	Gtk::Label col6_title;
-	Gtk::Label col7_title;
-	Gtk::Label col8_title;
-	Gtk::Label col9_title;
-	Gtk::Label col10_title;
+	Gtk::Label col_title[12];
 
 	sigc::connection update_connection;
 	PBD::ScopedConnection current_connection;

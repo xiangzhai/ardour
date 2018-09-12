@@ -27,6 +27,8 @@
 #include "ardour/transport_master.h"
 #include "ardour/transport_master_manager.h"
 
+#include "widgets/tooltips.h"
+
 #include "gtkmm2ext/utils.h"
 #include "gtkmm2ext/gui_thread.h"
 
@@ -38,6 +40,7 @@ using namespace Gtk;
 using namespace Gtkmm2ext;
 using namespace ARDOUR;
 using namespace PBD;
+using namespace ArdourWidgets;
 
 TransportMastersDialog::TransportMastersDialog ()
 	: ArdourDialog (_("Transport Masters"))
@@ -45,16 +48,28 @@ TransportMastersDialog::TransportMastersDialog ()
 {
 	get_vbox()->pack_start (table);
 
-	col1_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Name")));
-	col2_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Type")));
-	col3_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Format")));
-	col4_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Current")));
-	col5_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Timestamp")));
-	col6_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Delta")));
-	col7_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Collect")));
-	col8_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Use")));
-	col9_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Data Source")));
-	col10_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Accept")));
+	col_title[0].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Name")));
+	col_title[0].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Name")));
+	col_title[1].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Type")));
+	col_title[2].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Format")));
+	col_title[3].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Current")));
+	col_title[4].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Timestamp")));
+	col_title[5].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Delta")));
+	col_title[6].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Collect")));
+	col_title[7].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Use")));
+	col_title[8].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Data Source")));
+	col_title[9].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Accept")));
+	col_title[10].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Clock Synced")));
+	col_title[11].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("29.97/30")));
+
+	set_tooltip (col_title[11], _("<b>When enabled</b> the external timecode source is assumed to use 29.97 fps instead of 30000/1001.\n"
+	                             "SMPTE 12M-1999 specifies 29.97df as 30000/1001. The spec further mentions that "
+	                             "drop-sample timecode has an accumulated error of -86ms over a 24-hour period.\n"
+	                             "Drop-sample timecode would compensate exactly for a NTSC color frame rate of 30 * 0.9990 (ie 29.970000). "
+	                             "That is not the actual rate. However, some vendors use that rate - despite it being against the specs - "
+	                             "because the variant of using exactly 29.97 fps has zero timecode drift.\n"
+		             ));
+
 
 	table.set_spacings (6);
 
@@ -88,18 +103,20 @@ TransportMastersDialog::rebuild ()
 	}
 
 	rows.clear ();
-	table.resize (masters.size()+1, 9);
+	table.resize (masters.size()+1, 12);
 
-	table.attach (col1_title, 0, 1, 0, 1);
-	table.attach (col2_title, 1, 2, 0, 1);
-	table.attach (col3_title, 2, 3, 0, 1);
-	table.attach (col4_title, 3, 4, 0, 1);
-	table.attach (col5_title, 4, 5, 0, 1);
-	table.attach (col6_title, 5, 6, 0, 1);
-	table.attach (col7_title, 6, 7, 0, 1);
-	table.attach (col8_title, 7, 8, 0, 1);
-	table.attach (col9_title, 8, 9, 0, 1);
-	table.attach (col10_title, 9, 10, 0, 1);
+	table.attach (col_title[0], 0, 1, 0, 1);
+	table.attach (col_title[1], 1, 2, 0, 1);
+	table.attach (col_title[2], 2, 3, 0, 1);
+	table.attach (col_title[3], 3, 4, 0, 1);
+	table.attach (col_title[4], 4, 5, 0, 1);
+	table.attach (col_title[5], 5, 6, 0, 1);
+	table.attach (col_title[6], 6, 7, 0, 1);
+	table.attach (col_title[7], 7, 8, 0, 1);
+	table.attach (col_title[8], 8, 9, 0, 1);
+	table.attach (col_title[9], 9, 10, 0, 1);
+	table.attach (col_title[10], 10, 11, 0, 1);
+	table.attach (col_title[11], 11, 12, 0, 1);
 
 	uint32_t n = 1;
 
@@ -127,6 +144,14 @@ TransportMastersDialog::rebuild ()
 		table.attach (r->collect_button, 6, 7, n, n+1);
 		table.attach (r->use_button, 7, 8, n, n+1);
 		table.attach (r->port_combo, 8, 9, n, n+1);
+		table.attach (r->request_options, 9, 10, n, n+1);
+
+		if (boost::dynamic_pointer_cast<TimecodeTransportMaster> (r->tm)) {
+			table.attach (r->sclock_synced_button, 10, 11, n, n+1);
+			r->sclock_synced_button.set_active (r->tm->sample_clock_synced());
+			r->sclock_synced_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::sync_changed));
+			table.attach (r->fps_299730_button, 11, 12, n, n+1);
+		}
 
 		r->port_combo.signal_changed().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::port_changed));
 		ARDOUR::AudioEngine::instance()->PortRegisteredOrUnregistered.connect (*r, invalidator (*this), boost::bind (&TransportMastersDialog::Row::connection_handler, r), gui_context());
@@ -135,12 +160,14 @@ TransportMastersDialog::rebuild ()
 
 		r->use_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::use_changed));
 		r->collect_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::collect_changed));
+		r->request_options.signal_button_press_event().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::request_option_press));
 
 	}
 }
 
 TransportMastersDialog::Row::Row ()
-	: ignore_active_change (false)
+	: request_option_menu (0)
+	, ignore_active_change (false)
 {
 }
 
@@ -156,6 +183,19 @@ void
 TransportMastersDialog::Row::collect_changed ()
 {
 	tm->set_collect (collect_button.get_active());
+}
+
+void
+TransportMastersDialog::Row::sync_changed ()
+{
+	tm->set_sample_clock_synced (sclock_synced_button.get_active());
+}
+
+bool
+TransportMastersDialog::Row::request_option_press (GdkEventButton* ev)
+{
+	std::cerr << "ROP\n";
+	return false;
 }
 
 void

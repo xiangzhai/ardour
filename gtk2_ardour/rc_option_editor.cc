@@ -3233,28 +3233,6 @@ RCOptionEditor::RCOptionEditor ()
 	add_option (_("Sync"), _sync_framerate);
 
 	// XXX TRANSPORTMASTERS
-#if 0
-	_sync_genlock = new BoolOption (
-		"timecode-source-is-synced",
-		_("Sync-lock timecode to clock (disable drift compensation)"),
-		sigc::mem_fun (*_rc_config, &RCConfiguration::get_timecode_source_is_synced),
-		sigc::mem_fun (*_rc_config, &RCConfiguration::set_timecode_source_is_synced)
-		);
-	Gtkmm2ext::UI::instance()->set_tip
-		(_sync_genlock->tip_widget(),
-		 string_compose (_("<b>When enabled</b> %1 will never varispeed when slaved to external timecode. "
-				   "Sync Lock indicates that the selected external timecode source shares clock-sync "
-				   "(Black &amp; Burst, Wordclock, etc) with the audio interface. "
-				   "This option disables drift compensation. The transport speed is fixed at 1.0. "
-				   "Vari-speed LTC will be ignored and cause drift."
-				   "\n\n"
-				   "<b>When disabled</b> %1 will compensate for potential drift, regardless if the "
-				   "timecode sources shares clock sync."
-				  ), PROGRAM_NAME));
-
-
-	add_option (_("Sync"), _sync_genlock);
-#endif
 
 	_sync_source_2997 = new BoolOption (
 		"timecode-source-2997",
