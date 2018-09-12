@@ -41,18 +41,20 @@ using namespace PBD;
 
 TransportMastersDialog::TransportMastersDialog ()
 	: ArdourDialog (_("Transport Masters"))
-	, table (4, 7)
+	, table (4, 9)
 {
 	get_vbox()->pack_start (table);
 
-	col1_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Type")));
-	col2_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Name")));
+	col1_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Name")));
+	col2_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Type")));
 	col3_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Format")));
 	col4_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Current")));
 	col5_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Timestamp")));
 	col6_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Delta")));
 	col7_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Collect")));
 	col8_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Use")));
+	col9_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Data Source")));
+	col10_title.set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Accept")));
 
 	table.set_spacings (6);
 
@@ -96,6 +98,8 @@ TransportMastersDialog::rebuild ()
 	table.attach (col6_title, 5, 6, 0, 1);
 	table.attach (col7_title, 6, 7, 0, 1);
 	table.attach (col8_title, 7, 8, 0, 1);
+	table.attach (col9_title, 8, 9, 0, 1);
+	table.attach (col10_title, 9, 10, 0, 1);
 
 	uint32_t n = 1;
 
@@ -127,7 +131,10 @@ TransportMastersDialog::rebuild ()
 		r->port_combo.signal_changed().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::port_changed));
 		ARDOUR::AudioEngine::instance()->PortRegisteredOrUnregistered.connect (*r, invalidator (*this), boost::bind (&TransportMastersDialog::Row::connection_handler, r), gui_context());
 
+		r->collect_button.set_active (r->tm->collect());
+
 		r->use_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::use_changed));
+		r->collect_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::collect_changed));
 
 	}
 }
@@ -138,12 +145,17 @@ TransportMastersDialog::Row::Row ()
 }
 
 void
-
 TransportMastersDialog::Row::use_changed ()
 {
 	if (use_button.get_active()) {
 		Config->set_sync_source (tm->type());
 	}
+}
+
+void
+TransportMastersDialog::Row::collect_changed ()
+{
+	tm->set_collect (collect_button.get_active());
 }
 
 void
@@ -257,18 +269,21 @@ TransportMastersDialog::Row::update (Session* s, samplepos_t now)
 	boost::shared_ptr<TimecodeTransportMaster> ttm;
 
 	if (s) {
-		tm->speed_and_position (speed, pos, now);
-		sample_to_timecode (pos, t, false, false, 25, false, AudioEngine::instance()->sample_rate(), 100, false, 0);
 
-		if ((ttm = boost::dynamic_pointer_cast<TimecodeTransportMaster> (tm))) {
-			format.set_text (timecode_format_name (ttm->apparent_timecode_format()));
-		} else {
-			format.set_text ("");
+		if (tm->speed_and_position (speed, pos, now)) {
+
+			sample_to_timecode (pos, t, false, false, 25, false, AudioEngine::instance()->sample_rate(), 100, false, 0);
+
+			if ((ttm = boost::dynamic_pointer_cast<TimecodeTransportMaster> (tm))) {
+				format.set_text (timecode_format_name (ttm->apparent_timecode_format()));
+			} else {
+				format.set_text ("");
+			}
+			current.set_text (Timecode::timecode_format_time (t));
+			timestamp.set_markup (tm->position_string());
+			delta.set_markup (tm->delta_string ());
+
 		}
-		current.set_text (Timecode::timecode_format_time (t));
-		timestamp.set_markup (tm->position_string());
-		delta.set_markup (tm->delta_string ());
-
 	}
 
 	populate_port_combo ();

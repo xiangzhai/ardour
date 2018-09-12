@@ -59,6 +59,9 @@ class TransportMastersDialog : public ArdourDialog
 		Gtk::CheckButton collect_button;
 		Gtk::RadioButton use_button;
 		Gtk::ComboBoxText port_combo;
+		Gtk::Menu request_options;
+
+		void build_request_options();
 
 		boost::shared_ptr<ARDOUR::TransportMaster> tm;
 
@@ -81,6 +84,7 @@ class TransportMastersDialog : public ArdourDialog
 		Glib::RefPtr<Gtk::ListStore> build_port_list (std::vector<std::string> const & ports);
 
 		void use_changed ();
+		void collect_changed ();
 		void port_changed ();
 		void connection_handler ();
 
@@ -99,6 +103,8 @@ class TransportMastersDialog : public ArdourDialog
 	Gtk::Label col6_title;
 	Gtk::Label col7_title;
 	Gtk::Label col8_title;
+	Gtk::Label col9_title;
+	Gtk::Label col10_title;
 
 	sigc::connection update_connection;
 	PBD::ScopedConnection current_connection;
