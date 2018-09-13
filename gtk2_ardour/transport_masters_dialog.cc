@@ -160,7 +160,7 @@ TransportMastersDialog::rebuild ()
 
 		r->use_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::use_button_toggled));
 		r->collect_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::collect_button_toggled));
-		r->request_options.signal_button_press_event().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::request_option_press));
+		r->request_options.signal_button_press_event().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::request_option_press), false);
 
 	}
 }
@@ -194,8 +194,31 @@ TransportMastersDialog::Row::sync_button_toggled ()
 bool
 TransportMastersDialog::Row::request_option_press (GdkEventButton* ev)
 {
-	std::cerr << "ROP\n";
+	if (ev->button == 1) {
+		if (!request_option_menu) {
+			build_request_options ();
+		}
+		request_option_menu->popup (1, ev->time);
+		return true;
+	}
 	return false;
+}
+
+void
+TransportMastersDialog::Row::build_request_options ()
+{
+	using namespace Gtk::Menu_Helpers;
+
+	request_option_menu = manage (new Menu);
+
+	MenuList& items (request_option_menu->items());
+
+	items.push_back (CheckMenuElem (_("Accept speed-changing commands (start/stop)")));
+	CheckMenuItem* i = dynamic_cast<CheckMenuItem *> (&items.back ());
+	i->set_active (tm->request_mask() & TR_Speed);
+	items.push_back (CheckMenuElem (_("Accept locate commands")));
+	i = dynamic_cast<CheckMenuItem *> (&items.back ());
+	i->set_active (tm->request_mask() & TR_Locate);
 }
 
 void
@@ -307,6 +330,7 @@ TransportMastersDialog::Row::update (Session* s, samplepos_t now)
 	stringstream ss;
 	Time t;
 	boost::shared_ptr<TimecodeTransportMaster> ttm;
+	boost::shared_ptr<MIDIClock_TransportMaster> mtm;
 
 	if (s) {
 
@@ -316,6 +340,10 @@ TransportMastersDialog::Row::update (Session* s, samplepos_t now)
 
 			if ((ttm = boost::dynamic_pointer_cast<TimecodeTransportMaster> (tm))) {
 				format.set_text (timecode_format_name (ttm->apparent_timecode_format()));
+			} else if ((mtm = boost::dynamic_pointer_cast<MIDIClock_TransportMaster> (tm))) {
+				char buf[8];
+				snprintf (buf, sizeof (buf), "%.1f", mtm->bpm());
+				format.set_text (buf);
 			} else {
 				format.set_text ("");
 			}
