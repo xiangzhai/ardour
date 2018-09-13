@@ -90,10 +90,10 @@ class TransportMastersDialog : public ArdourDialog
 		void populate_port_combo ();
 		Glib::RefPtr<Gtk::ListStore> build_port_list (std::vector<std::string> const & ports);
 
-		void use_changed ();
-		void collect_changed ();
-		void port_changed ();
-		void sync_changed ();
+		void use_button_toggled ();
+		void collect_button_toggled ();
+		void sync_button_toggled ();
+		void port_choice_changed ();
 		void connection_handler ();
 		bool request_option_press (GdkEventButton*);
 

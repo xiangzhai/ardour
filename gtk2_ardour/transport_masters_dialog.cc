@@ -149,17 +149,17 @@ TransportMastersDialog::rebuild ()
 		if (boost::dynamic_pointer_cast<TimecodeTransportMaster> (r->tm)) {
 			table.attach (r->sclock_synced_button, 10, 11, n, n+1);
 			r->sclock_synced_button.set_active (r->tm->sample_clock_synced());
-			r->sclock_synced_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::sync_changed));
+			r->sclock_synced_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::sync_button_toggled));
 			table.attach (r->fps_299730_button, 11, 12, n, n+1);
 		}
 
-		r->port_combo.signal_changed().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::port_changed));
+		r->port_combo.signal_changed().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::port_choice_changed));
 		ARDOUR::AudioEngine::instance()->PortRegisteredOrUnregistered.connect (*r, invalidator (*this), boost::bind (&TransportMastersDialog::Row::connection_handler, r), gui_context());
 
 		r->collect_button.set_active (r->tm->collect());
 
-		r->use_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::use_changed));
-		r->collect_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::collect_changed));
+		r->use_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::use_button_toggled));
+		r->collect_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::collect_button_toggled));
 		r->request_options.signal_button_press_event().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::request_option_press));
 
 	}
@@ -172,7 +172,7 @@ TransportMastersDialog::Row::Row ()
 }
 
 void
-TransportMastersDialog::Row::use_changed ()
+TransportMastersDialog::Row::use_button_toggled ()
 {
 	if (use_button.get_active()) {
 		Config->set_sync_source (tm->type());
@@ -180,13 +180,13 @@ TransportMastersDialog::Row::use_changed ()
 }
 
 void
-TransportMastersDialog::Row::collect_changed ()
+TransportMastersDialog::Row::collect_button_toggled ()
 {
 	tm->set_collect (collect_button.get_active());
 }
 
 void
-TransportMastersDialog::Row::sync_changed ()
+TransportMastersDialog::Row::sync_button_toggled ()
 {
 	tm->set_sample_clock_synced (sclock_synced_button.get_active());
 }
@@ -277,7 +277,7 @@ TransportMastersDialog::Row::populate_port_combo ()
 }
 
 void
-TransportMastersDialog::Row::port_changed ()
+TransportMastersDialog::Row::port_choice_changed ()
 {
 	if (ignore_active_change) {
 		return;
