@@ -467,6 +467,8 @@ class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public T
 	std::string position_string() const;
 	std::string delta_string() const;
 
+	float bpm() const { return _bpm; }
+
   protected:
 	PBD::ScopedConnectionList port_connections;
 
@@ -504,14 +506,6 @@ class LIBARDOUR_API MIDIClock_TransportMaster : public TransportMaster, public T
 	void calculate_filter_coefficients (double qpm);
 	void update_midi_clock (MIDI::Parser& parser, samplepos_t timestamp);
 	void read_current (SafeTime *) const;
-
-	static const int accumulator_capacity = 10;
-	double accumulator[accumulator_capacity];
-	int accumulator_index;
-	int accumulator_size;
-
-	void accumulator_reset ();
-	double accumulator_average();
 };
 
 class LIBARDOUR_API Engine_TransportMaster : public TransportMaster

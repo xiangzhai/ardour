@@ -56,8 +56,6 @@ MIDIClock_TransportMaster::MIDIClock_TransportMaster (std::string const & name, 
 	, _running (false)
 	, _bpm (0)
 {
-	accumulator_reset ();
-
 	if ((_port = create_midi_port (string_compose ("%1 in", name))) == 0) {
 		throw failed_constructor();
 	}
@@ -71,7 +69,6 @@ MIDIClock_TransportMaster::~MIDIClock_TransportMaster()
 void
 MIDIClock_TransportMaster::init ()
 {
-	accumulator_reset ();
 	midi_clock_count = 0;
 	last_timestamp = 0;
 }
@@ -194,25 +191,6 @@ MIDIClock_TransportMaster::calculate_filter_coefficients (double qpm)
 	DEBUG_TRACE (DEBUG::MidiClock, string_compose ("DLL coefficients: bw:%1 omega:%2 b:%3 c:%4\n", bandwidth, omega, b, c));
 }
 
-
-void
-MIDIClock_TransportMaster::accumulator_reset ()
-{
-	accumulator_size = 0;
-	accumulator_index = 0;
-}
-
-double
-MIDIClock_TransportMaster::accumulator_average()
-{
-	double tot = 0;
-
-	for (int n = 0; n < accumulator_size; ++n) {
-		tot += accumulator[n];
-	}
-	return tot / accumulator_size;
-}
-
 void
 MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t timestamp)
 {
@@ -241,20 +219,12 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 		 * (quarters per minute, and fully initialize the DLL
 		 */
 
-		e = timestamp - last_timestamp;
-
-		accumulator[accumulator_index] = e;
-		accumulator_index++;
-		accumulator_index %= accumulator_capacity;
-
-		if (accumulator_size < accumulator_capacity) {
-			accumulator_size++;
-		}
+		e  = timestamp - last_timestamp;
 
 		const samplecnt_t samples_per_quarter = e * 24;
-		const double qpm = (ENGINE->sample_rate() * 60.0) / samples_per_quarter;
+		_bpm = (ENGINE->sample_rate() * 60.0) / samples_per_quarter;
 
-		calculate_filter_coefficients (qpm);
+		calculate_filter_coefficients (_bpm);
 
 		/* finish DLL initialization */
 
@@ -276,28 +246,9 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 		t1 += b * e + e2;
 		e2 += c * e;
 
-		const double elapsed = timestamp - last_timestamp;
-		const double current = accumulator_average();
-
-		/* detect substantial changes in apparent tempo (defined as a
-		 * change of more than 20% of the current tempo.
-		 */
-
-		if (fabs (elapsed - current) > (0.20 * current)) {
-			accumulator_reset ();
-		}
-
-		accumulator[accumulator_index] = timestamp - last_timestamp;
-		accumulator_index++;
-		accumulator_index %= accumulator_capacity;
-		if (accumulator_size < accumulator_capacity) {
-			accumulator_size++;
-		}
-
-		const samplecnt_t instantaneous_samples_per_quarter = accumulator_average () * 24;
-		const double instantaneous_qpm = (ENGINE->sample_rate() * 60.0) / instantaneous_samples_per_quarter;
-
-		calculate_filter_coefficients (instantaneous_qpm);
+		const double samples_per_quarter = (timestamp - last_timestamp) * 24.0;
+		const double instantaneous_bpm = (ENGINE->sample_rate() * 60.0) / samples_per_quarter;
+		const double lpf_coeff = 0.05;
 
 		const double predicted_clock_interval_in_samples = (t1 - t0);
 
@@ -307,7 +258,17 @@ MIDIClock_TransportMaster::update_midi_clock (Parser& /*parser*/, samplepos_t ti
 
 		/* _bpm (really, _qpm) is absolute */
 
-		_bpm = instantaneous_qpm;
+		/* detect substantial changes in apparent tempo (defined as a
+		 * change of more than 20% of the current tempo.
+		 */
+
+		if (fabs (instantaneous_bpm - _bpm) > (0.20 * _bpm)) {
+			_bpm = instantaneous_bpm;
+		} else {
+			_bpm += lpf_coeff * (instantaneous_bpm - _bpm);
+		}
+
+		calculate_filter_coefficients (_bpm);
 
 		// need at least two clock events to compute speed
 
