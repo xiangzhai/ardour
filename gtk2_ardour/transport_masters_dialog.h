@@ -29,6 +29,8 @@
 #include <gtkmm/table.h>
 #include <gtkmm/treestore.h>
 
+#include "ardour_dialog.h"
+
 namespace Gtk {
 	class Menu;
 }
@@ -37,13 +39,11 @@ namespace ARDOUR {
 	class TransportMaster;
 }
 
-#include "ardour_dialog.h"
-
-class TransportMastersDialog : public ArdourDialog
+class TransportMastersWidget : public Gtk::VBox, public ARDOUR::SessionHandlePtr
 {
   public:
-	TransportMastersDialog ();
-	~TransportMastersDialog ();
+	TransportMastersWidget ();
+	~TransportMastersWidget ();
 
 	void update (ARDOUR::samplepos_t);
 
@@ -113,5 +113,17 @@ class TransportMastersDialog : public ArdourDialog
 	void current_changed (boost::shared_ptr<ARDOUR::TransportMaster> old_master, boost::shared_ptr<ARDOUR::TransportMaster> new_master);
 
 };
+
+class TransportMastersDialog : public ArdourDialog
+{
+  public:
+	TransportMastersDialog ();
+
+	void set_session (ARDOUR::Session*);
+
+  private:
+	TransportMastersWidget w;
+};
+
 
 #endif /* __ardour_gtk_transport_masters_dialog_h__ */

@@ -42,11 +42,10 @@ using namespace ARDOUR;
 using namespace PBD;
 using namespace ArdourWidgets;
 
-TransportMastersDialog::TransportMastersDialog ()
-	: ArdourDialog (_("Transport Masters"))
-	, table (4, 9)
+TransportMastersWidget::TransportMastersWidget ()
+	: table (4, 9)
 {
-	get_vbox()->pack_start (table);
+	pack_start (table);
 
 	col_title[0].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Name")));
 	col_title[0].set_markup (string_compose ("<span weight=\"bold\">%1</span>", _("Name")));
@@ -73,12 +72,12 @@ TransportMastersDialog::TransportMastersDialog ()
 
 	table.set_spacings (6);
 
-	TransportMasterManager::instance().CurrentChanged.connect (current_connection, invalidator (*this), boost::bind (&TransportMastersDialog::current_changed, this, _1, _2), gui_context());
+	TransportMasterManager::instance().CurrentChanged.connect (current_connection, invalidator (*this), boost::bind (&TransportMastersWidget::current_changed, this, _1, _2), gui_context());
 
 	rebuild ();
 }
 
-TransportMastersDialog::~TransportMastersDialog ()
+TransportMastersWidget::~TransportMastersWidget ()
 {
 	for (vector<Row*>::iterator r = rows.begin(); r != rows.end(); ++r) {
 		delete *r;
@@ -86,13 +85,13 @@ TransportMastersDialog::~TransportMastersDialog ()
 }
 
 void
-TransportMastersDialog::current_changed (boost::shared_ptr<TransportMaster> old_master, boost::shared_ptr<TransportMaster> new_master)
+TransportMastersWidget::current_changed (boost::shared_ptr<TransportMaster> old_master, boost::shared_ptr<TransportMaster> new_master)
 {
 	cerr << "master changed to " << new_master << endl;
 }
 
 void
-TransportMastersDialog::rebuild ()
+TransportMastersWidget::rebuild ()
 {
 	TransportMasterManager::TransportMasters const & masters (TransportMasterManager::instance().transport_masters());
 
@@ -149,30 +148,30 @@ TransportMastersDialog::rebuild ()
 		if (boost::dynamic_pointer_cast<TimecodeTransportMaster> (r->tm)) {
 			table.attach (r->sclock_synced_button, 10, 11, n, n+1);
 			r->sclock_synced_button.set_active (r->tm->sample_clock_synced());
-			r->sclock_synced_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::sync_button_toggled));
+			r->sclock_synced_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersWidget::Row::sync_button_toggled));
 			table.attach (r->fps_299730_button, 11, 12, n, n+1);
 		}
 
-		r->port_combo.signal_changed().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::port_choice_changed));
-		ARDOUR::AudioEngine::instance()->PortRegisteredOrUnregistered.connect (*r, invalidator (*this), boost::bind (&TransportMastersDialog::Row::connection_handler, r), gui_context());
+		r->port_combo.signal_changed().connect (sigc::mem_fun (*r, &TransportMastersWidget::Row::port_choice_changed));
+		ARDOUR::AudioEngine::instance()->PortRegisteredOrUnregistered.connect (*r, invalidator (*this), boost::bind (&TransportMastersWidget::Row::connection_handler, r), gui_context());
 
 		r->collect_button.set_active (r->tm->collect());
 
-		r->use_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::use_button_toggled));
-		r->collect_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::collect_button_toggled));
-		r->request_options.signal_button_press_event().connect (sigc::mem_fun (*r, &TransportMastersDialog::Row::request_option_press), false);
+		r->use_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersWidget::Row::use_button_toggled));
+		r->collect_button.signal_toggled().connect (sigc::mem_fun (*r, &TransportMastersWidget::Row::collect_button_toggled));
+		r->request_options.signal_button_press_event().connect (sigc::mem_fun (*r, &TransportMastersWidget::Row::request_option_press), false);
 
 	}
 }
 
-TransportMastersDialog::Row::Row ()
+TransportMastersWidget::Row::Row ()
 	: request_option_menu (0)
 	, ignore_active_change (false)
 {
 }
 
 void
-TransportMastersDialog::Row::use_button_toggled ()
+TransportMastersWidget::Row::use_button_toggled ()
 {
 	if (use_button.get_active()) {
 		Config->set_sync_source (tm->type());
@@ -180,19 +179,19 @@ TransportMastersDialog::Row::use_button_toggled ()
 }
 
 void
-TransportMastersDialog::Row::collect_button_toggled ()
+TransportMastersWidget::Row::collect_button_toggled ()
 {
 	tm->set_collect (collect_button.get_active());
 }
 
 void
-TransportMastersDialog::Row::sync_button_toggled ()
+TransportMastersWidget::Row::sync_button_toggled ()
 {
 	tm->set_sample_clock_synced (sclock_synced_button.get_active());
 }
 
 bool
-TransportMastersDialog::Row::request_option_press (GdkEventButton* ev)
+TransportMastersWidget::Row::request_option_press (GdkEventButton* ev)
 {
 	if (ev->button == 1) {
 		if (!request_option_menu) {
@@ -205,7 +204,7 @@ TransportMastersDialog::Row::request_option_press (GdkEventButton* ev)
 }
 
 void
-TransportMastersDialog::Row::build_request_options ()
+TransportMastersWidget::Row::build_request_options ()
 {
 	using namespace Gtk::Menu_Helpers;
 
@@ -222,12 +221,12 @@ TransportMastersDialog::Row::build_request_options ()
 }
 
 void
-TransportMastersDialog::Row::connection_handler ()
+TransportMastersWidget::Row::connection_handler ()
 {
 }
 
 Glib::RefPtr<Gtk::ListStore>
-TransportMastersDialog::Row::build_port_list (vector<string> const & ports)
+TransportMastersWidget::Row::build_port_list (vector<string> const & ports)
 {
 	Glib::RefPtr<Gtk::ListStore> store = ListStore::create (port_columns);
 	TreeModel::Row row;
@@ -256,7 +255,7 @@ TransportMastersDialog::Row::build_port_list (vector<string> const & ports)
 }
 
 void
-TransportMastersDialog::Row::populate_port_combo ()
+TransportMastersWidget::Row::populate_port_combo ()
 {
 	if (!tm->port()) {
 		port_combo.hide ();
@@ -300,7 +299,7 @@ TransportMastersDialog::Row::populate_port_combo ()
 }
 
 void
-TransportMastersDialog::Row::port_choice_changed ()
+TransportMastersWidget::Row::port_choice_changed ()
 {
 	if (ignore_active_change) {
 		return;
@@ -321,7 +320,7 @@ TransportMastersDialog::Row::port_choice_changed ()
 }
 
 void
-TransportMastersDialog::Row::update (Session* s, samplepos_t now)
+TransportMastersWidget::Row::update (Session* s, samplepos_t now)
 {
 	using namespace Timecode;
 
@@ -358,7 +357,7 @@ TransportMastersDialog::Row::update (Session* s, samplepos_t now)
 }
 
 void
-TransportMastersDialog::update (samplepos_t audible)
+TransportMastersWidget::update (samplepos_t audible)
 {
 	samplepos_t now = AudioEngine::instance()->sample_time ();
 
@@ -368,15 +367,29 @@ TransportMastersDialog::update (samplepos_t audible)
 }
 
 void
-TransportMastersDialog::on_map ()
+TransportMastersWidget::on_map ()
 {
-	update_connection = ARDOUR_UI::Clock.connect (sigc::mem_fun (*this, &TransportMastersDialog::update));
-	ArdourDialog::on_map ();
+	update_connection = ARDOUR_UI::Clock.connect (sigc::mem_fun (*this, &TransportMastersWidget::update));
+	Gtk::VBox::on_map ();
 }
 
 void
-TransportMastersDialog::on_unmap ()
+TransportMastersWidget::on_unmap ()
 {
 	update_connection.disconnect ();
-	ArdourDialog::on_unmap ();
+	Gtk::VBox::on_unmap ();
+}
+
+TransportMastersDialog::TransportMastersDialog ()
+	: ArdourDialog (_("Transport Masters"))
+{
+	get_vbox()->pack_start (w);
+	w.show ();
+}
+
+void
+TransportMastersDialog::set_session (ARDOUR::Session* s)
+{
+	ArdourDialog::set_session (s);
+	w.set_session (s);
 }
