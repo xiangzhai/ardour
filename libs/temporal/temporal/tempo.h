@@ -38,11 +38,11 @@
 #include "temporal/timeline.h"
 #include "temporal/types.h"
 
-/* A tempo map is built from 4 types of entities
+/* A tempo map is built from 3 types of entities
 
    1) tempo markers
    2) meter (time signature) markers
-   4) position markers
+   3) position markers
 
    Beats increase monotonically throughout the tempo map (BBT may not).
 
