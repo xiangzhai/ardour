@@ -20,8 +20,11 @@
 
 #include <iostream>
 #include <cairomm/context.h>
+
 #include "pbd/stacktrace.h"
 #include "pbd/compose.h"
+
+#include "gtkmm2ext/utils.h"
 
 #include "canvas/canvas.h"
 #include "canvas/rectangle.h"
@@ -33,6 +36,7 @@ using namespace ArdourCanvas;
 Rectangle::Rectangle (Canvas* c)
 	: Item (c)
 	, _outline_what ((What) (LEFT | RIGHT | TOP | BOTTOM))
+	, _corner_radius (0.0)
 {
 }
 
@@ -40,12 +44,14 @@ Rectangle::Rectangle (Canvas* c, Rect const & rect)
 	: Item (c)
 	, _rect (rect)
 	, _outline_what ((What) (LEFT | RIGHT | TOP | BOTTOM))
+	, _corner_radius (0.0)
 {
 }
 
 Rectangle::Rectangle (Item* parent)
 	: Item (parent)
 	, _outline_what ((What) (LEFT | RIGHT | TOP | BOTTOM))
+	, _corner_radius (0.0)
 {
 }
 
@@ -53,6 +59,7 @@ Rectangle::Rectangle (Item* parent, Rect const & rect)
 	: Item (parent)
 	, _rect (rect)
 	, _outline_what ((What) (LEFT | RIGHT | TOP | BOTTOM))
+	, _corner_radius (0.0)
 {
 }
 
@@ -69,6 +76,13 @@ Rectangle::render (Rect const & area, Cairo::RefPtr<Cairo::Context> context) con
 		return;
 	}
 
+
+	if (_corner_radius) {
+		context->save ();
+		Gtkmm2ext::rounded_rectangle (context, self.x0, self.y0, self.width(), self.height(), _corner_radius);
+		context->clip ();
+	}
+
 	if (_fill && !_transparent) {
 		if (_stops.empty()) {
 			setup_fill_context (context);
@@ -76,7 +90,11 @@ Rectangle::render (Rect const & area, Cairo::RefPtr<Cairo::Context> context) con
 			setup_gradient_context (context, self, Duple (draw.x0, draw.y0));
 		}
 
-		context->rectangle (draw.x0, draw.y0, draw.width(), draw.height());
+		if (_corner_radius) {
+			Gtkmm2ext::rounded_rectangle (context, draw.x0, draw.y0, draw.width(), draw.height(), _corner_radius);
+		} else {
+			context->rectangle (draw.x0, draw.y0, draw.width(), draw.height());
+		}
 		context->fill ();
 	}
 
@@ -104,7 +122,11 @@ Rectangle::render (Rect const & area, Cairo::RefPtr<Cairo::Context> context) con
 
 		if (_outline_what == What (LEFT|RIGHT|BOTTOM|TOP)) {
 
-			context->rectangle (self.x0, self.y0, self.width(), self.height());
+			if (_corner_radius) {
+				Gtkmm2ext::rounded_rectangle (context, self.x0, self.y0, self.width(), self.height(), _corner_radius);
+			} else {
+				context->rectangle (self.x0, self.y0, self.width(), self.height());
+			}
 
 		} else {
 
@@ -130,6 +152,10 @@ Rectangle::render (Rect const & area, Cairo::RefPtr<Cairo::Context> context) con
 		}
 
 		context->stroke ();
+	}
+
+	if (_corner_radius) {
+		context->restore ();
 	}
 
 	render_children (area, context);
@@ -274,4 +300,14 @@ Rectangle::vertical_fraction (double y) const
          */
 
         return 1.0 - ((i.y - bbox.y0) / bbox.height());
+}
+
+void
+Rectangle::set_corner_radius (double r)
+{
+	/* note: this does not change the bounding box */
+
+	begin_change ();
+	_corner_radius = r;
+	end_change ();
 }
