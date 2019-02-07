@@ -268,7 +268,13 @@ DiskReader::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 		}
 	}
 
-	if ((speed == 0.0) && (ms == MonitoringDisk)) {
+	const gain_t target_gain = (speed == 0.0 || ((ms & MonitoringDisk) == 0)) ? 0.0 : 1.0;
+
+	if (!_session.cfg ()->get_use_transport_fades ()) {
+		_declick_amp.set_gain (target_gain);
+	}
+
+	if ((speed == 0.0) && (ms == MonitoringDisk) && _declick_amp.gain () == target_gain) {
 		/* no channels, or stopped. Don't accidentally pass any data
 		 * from disk into our outputs (e.g. via interpolation)
 		 */
@@ -289,6 +295,16 @@ DiskReader::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 		disk_samples_to_consume = 0;
 	} else {
 		disk_samples_to_consume = nframes;
+	}
+
+	if (_declick_amp.gain () != target_gain && target_gain == 0) {
+		/* fade-out */
+		printf ("fade-out speed=%f gain=%f off=%ld start=%ld pbs=%ld\n", speed, _declick_amp.gain (), _declick_offs, start_sample, playback_sample);
+		ms = MonitorState (ms | MonitoringDisk);
+		assert (result_required);
+		result_required = true;
+	} else {
+		_declick_offs = 0;
 	}
 
 	if (!result_required || ((ms & MonitoringDisk) == 0) || still_locating || _no_disk_output) {
@@ -350,9 +366,16 @@ DiskReader::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 					Underrun ();
 					return;
 				}
+			} else {
+				assert (_declick_amp.gain () != target_gain);
+				const samplecnt_t total = chaninfo->rbuf->read (disk_buf.data(), nframes, false, _declick_offs);
+				_declick_offs += total;
 			}
 
+			_declick_amp.apply_gain (disk_buf, nframes, target_gain);
+
 			if (scaling != 1.0f && speed != 0.0) {
+				// TODO also when de-clicking @speed == 0;
 				Amp::apply_simple_gain (disk_buf, disk_samples_to_consume, scaling);
 			}
 
@@ -562,6 +585,9 @@ DiskReader::seek (samplepos_t sample, bool complete_refill)
 	boost::shared_ptr<ChannelList> c = channels.reader();
 
 	//sample = std::max ((samplecnt_t)0, sample -_session.worst_output_latency ());
+
+	printf ("DiskReader::seek %s %lld -> %lld refill=%d\n", owner()->name().c_str(), playback_sample, sample, complete_refill);
+	// TODO: check if we can micro-locate
 
 	for (n = 0, chan = c->begin(); chan != c->end(); ++chan, ++n) {
 		(*chan)->rbuf->reset ();
