@@ -595,6 +595,12 @@ Session::non_realtime_locate ()
 {
 	DEBUG_TRACE (DEBUG::Transport, string_compose ("locate tracks to %1\n", _transport_sample));
 
+	if (declick_in_progress ()) {
+		add_post_transport_work (PostTransportLocate);
+		_butler->schedule_transport_work ();
+		return;
+	}
+
 	if (Config->get_loop_is_mode() && get_play_loop()) {
 
 		Location *loc  = _locations->auto_loop_location();
@@ -887,6 +893,7 @@ Session::non_realtime_stop (bool abort, int on_entry, bool& finished)
 
 			if (do_locate) {
 				_engine.transport_locate (_transport_sample);
+				//non_realtime_locate ();
 			}
 		}
 
@@ -906,18 +913,20 @@ Session::non_realtime_stop (bool abort, int on_entry, bool& finished)
 	}
 
 	/* this for() block can be put inside the previous if() and has the effect of ... ??? what */
-
+#if 0
 	{
 		DEBUG_TRACE (DEBUG::Transport, X_("Butler PTW: locate\n"));
 		for (RouteList::iterator i = r->begin(); i != r->end(); ++i) {
 			DEBUG_TRACE (DEBUG::Transport, string_compose ("Butler PTW: locate on %1\n", (*i)->name()));
 			(*i)->non_realtime_locate (_transport_sample);
 
+#if 0
 			if (on_entry != g_atomic_int_get (&_butler->should_do_transport_work)) {
 				finished = false;
 				/* we will be back */
 				return;
 			}
+#endif
 		}
 	}
 
@@ -927,6 +936,7 @@ Session::non_realtime_stop (bool abort, int on_entry, bool& finished)
 			(*i)->non_realtime_locate (_transport_sample);
 		}
 	}
+#endif
 
 	have_looped = false;
 
@@ -1236,7 +1246,9 @@ Session::locate (samplepos_t target_sample, bool with_roll, bool with_flush, boo
 	// thread(s?) can restart.
 	g_atomic_int_inc (&_seek_counter);
 	_last_roll_or_reversal_location = target_sample;
+	if (!for_loop_enabled && Config->get_seamless_loop()) {
 	_remaining_latency_preroll = worst_latency_preroll ();
+	}
 	timecode_time(_transport_sample, transmitting_timecode_time); // XXX here?
 
 	/* do "stopped" stuff if:
@@ -1763,16 +1775,16 @@ Session::set_play_range (list<AudioRange>& range, bool leave_rolling)
 			next = i;
 			++next;
 
-			/* locating/stopping is subject to delays for declicking.
-			 */
 
 			samplepos_t requested_sample = i->end;
-
+#if 0
+			/* locating/stopping is subject to delays for declicking. */
 			if (requested_sample > current_block_size) {
 				requested_sample -= current_block_size;
 			} else {
 				requested_sample = 0;
 			}
+#endif
 
 			if (next == range.end()) {
 				ev = new SessionEvent (SessionEvent::RangeStop, SessionEvent::Add, requested_sample, 0, 0.0f);
