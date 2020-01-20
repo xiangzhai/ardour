@@ -1049,8 +1049,16 @@ Sequence<Time>::append_note_off_unlocked (const Event<Time>& ev)
 		NotePtr nn = *n;
 		if (ev.note() == nn->note() && nn->channel() == ev.channel()) {
 			assert(ev.time() >= nn->time());
-
+#if 1
+			/* Workaroud: Notes sould be at least 1 tick long. */
+			if (ev.time() - nn->time() == Temporal::Beats::ticks(0)) {
+				nn->set_length (Temporal::Beats::ticks(100));
+			} else {
+				nn->set_length (ev.time() - nn->time());
+			}
+#else
 			nn->set_length (ev.time() - nn->time());
+#endif
 			nn->set_off_velocity (ev.velocity());
 
 			_write_notes[ev.channel()].erase(n);
