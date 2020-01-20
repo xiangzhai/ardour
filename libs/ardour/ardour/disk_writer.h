@@ -186,6 +186,8 @@ private:
 	volatile gint _samples_pending_write;
 	volatile gint _num_captured_loops;
 	samplepos_t   _accumulated_capture_offset;
+	samplepos_t   _last_start_sample;
+	samplepos_t   _last_end_sample;
 
 	boost::shared_ptr<SMFSource> _midi_write_source;
 

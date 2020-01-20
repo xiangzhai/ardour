@@ -977,7 +977,7 @@ Track::use_captured_midi_sources (SourceList& srcs, CaptureInfos const & capture
 		                                                      _name, (*ci)->start, (*ci)->samples, region_name));
 
 
-		// cerr << _name << ": based on ci of " << (*ci)->start << " for " << (*ci)->samples << " add a region\n";
+		cerr << _name << ": based on ci of " << (*ci)->start << " for " << (*ci)->samples << " add a region\n";
 
 		try {
 			PropertyList plist;
@@ -1000,7 +1000,7 @@ Track::use_captured_midi_sources (SourceList& srcs, CaptureInfos const & capture
 			continue; /* XXX is this OK? */
 		}
 
-		cerr << "add new region, len = " << (*ci)->samples << " @ " << (*ci)->start << endl;
+		cerr << "add new MIDI region, len = " << (*ci)->samples << " @ " << (*ci)->start << " minus " << initial_capture << endl;
 
 		pl->add_region (midi_region, (*ci)->start + preroll_off, 1, _session.config.get_layered_record_mode ());
 	}
@@ -1103,6 +1103,8 @@ Track::use_captured_audio_sources (SourceList& srcs, CaptureInfos const & captur
 			error << _("AudioDiskstream: could not create region for captured audio!") << endmsg;
 			continue; /* XXX is this OK? */
 		}
+
+		cerr << "add new Audio region, len = " << (*ci)->samples << " @ " << (*ci)->start << " bufpos: "<< buffer_position << endl;
 
 		pl->add_region (region, (*ci)->start + preroll_off, 1, _session.config.get_layered_record_mode());
 		pl->set_layer (region, DBL_MAX);

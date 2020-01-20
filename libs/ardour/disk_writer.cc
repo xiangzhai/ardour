@@ -59,6 +59,8 @@ DiskWriter::DiskWriter (Session& s, string const & str, DiskIOProcessor::Flag f)
 	, _samples_pending_write (0)
 	, _num_captured_loops (0)
 	, _accumulated_capture_offset (0)
+	, _last_start_sample (0)
+	, _last_end_sample (0)
 	, _gui_feed_buffer(AudioEngine::instance()->raw_buffer_size (DataType::MIDI))
 {
 	DiskIOProcessor::init ();
@@ -146,7 +148,9 @@ DiskWriter::check_record_status (samplepos_t transport_sample, double speed, boo
 			_capture_start_sample = _session.transport_sample ();
 		}
 
-		_first_recordable_sample = _capture_start_sample;
+		printf ("SET _capture_start_sample sess[%s]: %ld sess=%ld run=%ld\n", name().c_str(), _capture_start_sample, _session.transport_sample (), transport_sample);
+
+		_first_recordable_sample = _capture_start_sample; //  - _session.remaining_latency_preroll ();
 
 		if (_alignment_style == ExistingMaterial) {
 			_first_recordable_sample += _capture_offset + _playback_offset;
@@ -382,6 +386,16 @@ DiskWriter::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 	}
 	_active = _pending_active;
 
+	if (start_sample != _last_end_sample) {
+		printf ("DiskWriter::run<%s> Discontinuity prev: %ld .. %ld | now: %ld ..%ld\n", 
+				name().c_str(),
+				_last_start_sample, _last_end_sample,
+				start_sample, end_sample);
+	}
+
+	_last_start_sample = start_sample;
+	_last_end_sample = end_sample;
+
 	uint32_t n;
 	boost::shared_ptr<ChannelList> c = channels.reader();
 	ChannelList::iterator chan;
@@ -393,7 +407,7 @@ DiskWriter::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 	bool re = record_enabled ();
 	bool punch_in = _session.config.get_punch_in () && _session.locations()->auto_punch_location ();
 	bool can_record = _session.actively_recording ();
-	can_record |= speed != 0 && _session.get_record_enabled () && punch_in && _session.transport_sample () <= _session.locations()->auto_punch_location ()->start ();
+	can_record |= speed != 0 && _session.get_record_enabled () && punch_in && start_sample <= _session.locations()->auto_punch_location ()->start ();
 
 	_need_butler = false;
 
@@ -434,7 +448,7 @@ DiskWriter::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 		// XXX also, first_recordable_sample & last_recordable_sample may both be == max_samplepos: coverage() will return OverlapNone in that case. Is thak OK?
 		calculate_record_range (ot, start_sample, nframes, rec_nframes, rec_offset);
 
-		DEBUG_TRACE (DEBUG::CaptureAlignment, string_compose ("%1: this time record %2 of %3 samples, offset %4\n", _name, rec_nframes, nframes, rec_offset));
+		//DEBUG_TRACE (DEBUG::CaptureAlignment, string_compose ("%1: this time record %2 of %3 samples, offset %4\n", _name, rec_nframes, nframes, rec_offset));
 
 		if (rec_nframes && !_was_recording) {
 			_capture_captured = 0;
@@ -446,6 +460,7 @@ DiskWriter::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 				   Otherwise, start the source right now as usual.
 				*/
 				_capture_captured     = start_sample - loop_start;
+				printf ("LOOP change %ld -> %ld\n", _capture_start_sample, loop_start);
 				_capture_start_sample = loop_start;
 			}
 
@@ -466,6 +481,12 @@ DiskWriter::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 		 */
 		if (rec_nframes) {
 			_accumulated_capture_offset += rec_offset;
+			if (rec_offset != 0) {
+				cerr << name() << " set capture offset to " << _accumulated_capture_offset << " RF: " << rec_nframes << " RO: " << rec_offset << " NF: " << nframes << " speed: " << speed << "\n";
+			}
+		} else {
+			//_accumulated_capture_offset += nframes;
+			cerr << name() << " NOT set capture offset to " << _accumulated_capture_offset << " RF: " << rec_nframes << " RO: " << rec_offset << " NF: " << nframes << " speed: " << speed << "\n";
 		}
 
 	}
@@ -556,8 +577,26 @@ DiskWriter::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 				*/
 				const samplecnt_t loop_offset = _num_captured_loops * loop_length;
 				const samplepos_t event_time = start_sample + loop_offset - _accumulated_capture_offset + ev.time();
+
+				printf ("ACC CAPTURE OFF [%s]: %ld\n", name().c_str(), _accumulated_capture_offset);
+
+				{
+					const uint8_t* __data = ev.buffer();
+					DEBUG_STR_DECL(a);
+					DEBUG_STR_APPEND(a, string_compose ("mididiskstream %1 capture event @ %2 + %3 + Loop = %4 sz %5 ", this, ev.time(), start_sample, event_time, ev.size()));
+					for (size_t i=0; i < ev.size(); ++i) {
+						DEBUG_STR_APPEND(a,hex);
+						DEBUG_STR_APPEND(a,"0x");
+						DEBUG_STR_APPEND(a,(int)__data[i]);
+						DEBUG_STR_APPEND(a,' ');
+					}
+					DEBUG_STR_APPEND(a,'\n');
+					cout << DEBUG_STR(a).str();
+				}
+
 				if (event_time < 0 || event_time < _first_recordable_sample) {
 					/* Event out of range, skip */
+					printf ("MIDI EVENT OUT OF RANGE\n");
 					continue;
 				}
 
@@ -572,6 +611,7 @@ DiskWriter::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 					}
 				}
 				if (skip_event) {
+					printf ("SKIP EVENT\n");
 					continue;
 				}
 
@@ -997,6 +1037,8 @@ DiskWriter::do_flush (RunContext ctxt, bool force_flush)
 			to_write = _chunk_samples;
 		}
 
+		printf ("Writing %ld/%ld events to source\n", to_write, total);
+
 		if (record_enabled() && ((total > _chunk_samples) || force_flush)) {
 			Source::Lock lm(_midi_write_source->mutex());
 			if (_midi_write_source->midi_write (lm, *_midi_buf, get_capture_start_sample (0), to_write) != to_write) {
@@ -1318,6 +1360,7 @@ DiskWriter::transport_stopped_wallclock (struct tm& when, time_t twhen, bool abo
 void
 DiskWriter::transport_looped (samplepos_t transport_sample)
 {
+	printf ("DiskWriter::transport_looped at %ld  last-run: %ld .. %ld\n", transport_sample, _last_start_sample, _last_end_sample);
 	if (_was_recording) {
 		// all we need to do is finish this capture, with modified capture length
 		boost::shared_ptr<ChannelList> c = channels.reader();
