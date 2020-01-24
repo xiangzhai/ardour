@@ -424,7 +424,7 @@ AudioEngine::process_callback (pframes_t nframes)
 		const double engine_speed = tmm.pre_process_transport_masters (nframes, sample_time_at_cycle_start());
 		Port::set_speed_ratio (engine_speed);
 		DEBUG_TRACE (DEBUG::Slave, string_compose ("transport master (current=%1) gives speed %2 (ports using %3)\n", tmm.current() ? tmm.current()->name() : string("[]"), engine_speed, Port::speed_ratio()));
-#if 0 // USE FOR DEBUG ONLY
+#if 1 // USE FOR DEBUG ONLY
 		/* use with Dummy backend, engine pulse and
 		 * scripts/_find_nonzero_sample.lua
 		 * to correlate with recorded region alignment.
