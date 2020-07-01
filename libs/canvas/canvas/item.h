@@ -148,6 +148,9 @@ public:
 
 	/* layout-related methods */
 
+	virtual void size_request (double& w, double& h) const;
+	void set_size_request (double w, double h);
+
 	virtual void preferred_size (Duple& minimum, Duple& natural) const;
 	virtual void size_allocate (Rect const&);
 	Rect allocation() const { return _allocation; }
@@ -216,12 +219,8 @@ public:
 	/* nested item ("grouping") API */
 	virtual void add (Item *);
 	virtual void add_front (Item *);
-<<<<<<< HEAD
-	void remove (Item *);
-=======
 	virtual void remove (Item *);
 	/* XXX this should become virtual also */
->>>>>>> constraint-packer
 	void clear (bool with_delete = false);
 
 	std::list<Item*> const & items () const {

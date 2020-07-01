@@ -306,5 +306,4 @@ Rectangle::size_allocate (Rect const & r)
 	if (_layout_sensitive) {
 		set (r);
 	}
->>>>>>> constraint-packer
 }

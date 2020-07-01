@@ -609,6 +609,27 @@ Item::size_allocate (Rect const & r)
 	}
 }
 
+void
+Item::size_request (double& w, double& h) const
+{
+	Rect r (bounding_box());
+
+	w = std::max (requested_width, r.width());
+	h = std::max (requested_height, r.height());
+}
+
+void
+Item::set_size_request (double w, double h)
+{
+	/* allow reset to zero or require that both are positive */
+
+	begin_change ();
+	requested_width = w;
+	requested_height = h;
+	_bounding_box_dirty = true;
+	end_change ();
+}
+
 /** @return Bounding box in this item's coordinates */
 ArdourCanvas::Rect
 Item::bounding_box () const
@@ -1222,8 +1243,6 @@ ArdourCanvas::operator<< (ostream& o, const Item& i)
 	i.dump (o);
 	return o;
 }
-<<<<<<< HEAD
-=======
 
 void
 Item::set_intrinsic_size (Distance w, Distance h)
@@ -1271,4 +1290,3 @@ Item::set_layout_sensitive (bool yn)
 {
 	_layout_sensitive = yn;
 }
->>>>>>> constraint-packer
