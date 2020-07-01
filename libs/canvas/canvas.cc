@@ -109,6 +109,9 @@ Canvas::zoomed ()
 	pick_current_item (0); // no current mouse position
 }
 
+static bool debug_render = false;
+#define CANVAS_DEBUG
+
 /** Render an area of the canvas.
  *  @param area Area in window coordinates.
  *  @param context Cairo context to render to.
@@ -121,7 +124,7 @@ Canvas::render (Rect const & area, Cairo::RefPtr<Cairo::Context> const & context
 	_last_render_start_timestamp = g_get_monotonic_time();
 
 #ifdef CANVAS_DEBUG
-	if (DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
+	if (debug_render || DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
 		cerr << this << " RENDER: " << area << endl;
 		//cerr << "CANVAS @ " << this << endl;
 		//dump (cerr);
@@ -134,6 +137,7 @@ Canvas::render (Rect const & area, Cairo::RefPtr<Cairo::Context> const & context
 	Rect root_bbox = _root.bounding_box();
 	if (!root_bbox) {
 		/* the root has no bounding box, so there's nothing to render */
+		cerr << "no bbox\n";
 		return;
 	}
 
@@ -886,6 +890,9 @@ GtkCanvas::on_realize ()
 		Gtkmm2ext::nsglview_overlay (_nsglview, get_window()->gobj());
 	}
 #endif
+
+	_root.set_fill (false);
+	_root.set_outline (false);
 }
 
 void
@@ -909,6 +916,8 @@ GtkCanvas::on_size_allocate (Gtk::Allocation& a)
 	}
 #endif
 
+	Rect r (a.get_x(), a.get_y(), a.get_width(), a.get_height());
+	_root.size_allocate (r);
 }
 
 /** Handler for GDK expose events.
@@ -1529,9 +1538,14 @@ GtkCanvasViewport::scrolled ()
 void
 GtkCanvasViewport::on_size_request (Gtk::Requisition* req)
 {
-	/* force the canvas to size itself */
-	// _canvas.root()->bounding_box();
+	Duple minimum;
+	Duple natural;
 
-	req->width = 16;
-	req->height = 16;
+	cerr << "GCV::osr()\n";
+	_canvas.root()->preferred_size (minimum, natural);
+	cerr << "size canvas to " << natural << endl;
+	_canvas.request_size (natural);
+
+	req->width = natural.width();
+	req->height = natural.height();
 }

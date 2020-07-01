@@ -70,17 +70,23 @@ Arc::compute_bounding_box () const
 void
 Arc::render (Rect const & /*area*/, Cairo::RefPtr<Cairo::Context> context) const
 {
-	if (_radius <= 0.0 || _arc_degrees <= 0.0) {
+	if (_radius <= 0.0 || _arc_degrees <= 0.0 || (!fill() && !outline())) {
 		return;
 	}
 
 	Duple c = item_to_window (Duple (_center.x, _center.y));
 
 	context->arc (c.x, c.y, _radius, _start_degrees * (M_PI/180.0), _arc_degrees * (M_PI/180.0));
-	setup_fill_context (context);
-	context->fill_preserve ();
-	setup_outline_context (context);
-	context->stroke ();
+
+	if (fill()) {
+		setup_fill_context (context);
+		context->fill_preserve ();
+	}
+
+	if (outline()) {
+		setup_outline_context (context);
+		context->stroke ();
+	}
 }
 
 void
@@ -139,4 +145,24 @@ Arc::covers (Duple const & point) const
 	return (angle_degs >= _start_degrees) &&
 		(angle_degs <= (_start_degrees + _arc_degrees)) &&
 		(radius < _radius);
+}
+
+void
+Arc::size_allocate (Rect const & r)
+{
+	begin_change ();
+
+	Item::size_allocate (r);
+
+	/* This is an arc - some section of a circle, so any difference between
+	 * height and width cannot change what is drawn. Pick width arbitrarily
+	 * as the "key" dimension
+	 */
+
+	_radius = min (r.width(),r.height()) / 2.0;
+	_center = Duple ((r.width()/2.), (r.height() /2.));
+
+	_bounding_box_dirty = true;
+
+	end_change ();
 }

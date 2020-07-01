@@ -42,6 +42,9 @@ Item::Item (Canvas* canvas)
 	, _scroll_parent (0)
 	, _visible (true)
 	, _bounding_box_dirty (true)
+	, _layout_sensitive (false)
+	, _intrinsic_width (-1.)
+	, _intrinsic_height(-1.)
 	, _lut (0)
 	, _resize_queued (false)
 	, requested_width (-1)
@@ -59,6 +62,9 @@ Item::Item (Item* parent)
 	, _scroll_parent (0)
 	, _visible (true)
 	, _bounding_box_dirty (true)
+	, _layout_sensitive (false)
+	, _intrinsic_width (-1.)
+	, _intrinsic_height(-1.)
 	, _lut (0)
 	, _resize_queued (false)
 	, requested_width (-1)
@@ -83,6 +89,8 @@ Item::Item (Item* parent, Duple const& p)
 	, _position (p)
 	, _visible (true)
 	, _bounding_box_dirty (true)
+	, _intrinsic_width (-1.)
+	, _intrinsic_height(-1.)
 	, _lut (0)
 	, _resize_queued (false)
 	, _ignore_events (false)
@@ -285,9 +293,8 @@ Item::set_position (Duple p)
 	if (visible()) {
 		_canvas->item_moved (this, pre_change_parent_bounding_box);
 
-
 		if (_parent) {
-			_parent->child_changed ();
+			_parent->child_changed (false);
 		}
 	}
 }
@@ -397,7 +404,7 @@ Item::propagate_show_hide ()
 	/* bounding box may have changed while we were hidden */
 
 	if (_parent) {
-		_parent->child_changed ();
+		_parent->child_changed (false);
 	}
 
 	_canvas->item_shown_or_hidden (this);
@@ -426,6 +433,7 @@ Item::unparent ()
 {
 	_parent = 0;
 	_scroll_parent = 0;
+	_layout_sensitive = false;
 }
 
 void
@@ -438,6 +446,7 @@ Item::reparent (Item* new_parent, bool already_added)
 	assert (_canvas == new_parent->canvas());
 
 	if (_parent) {
+		cerr << "remove " << whatami() << '/' << name << " from " << _parent->whatami() << '/' << _parent->name << endl;
 		_parent->remove (this);
 	}
 
@@ -447,6 +456,7 @@ Item::reparent (Item* new_parent, bool already_added)
 	_canvas = _parent->canvas ();
 
 	find_scroll_parent ();
+	set_layout_sensitive (_parent->layout_sensitive());
 
 	if (!already_added) {
 		_parent->add (this);
@@ -593,45 +603,20 @@ Item::grab_focus ()
 void
 Item::size_allocate (Rect const & r)
 {
-	_allocation = r;
+	if (_layout_sensitive) {
+		_position = Duple (r.x0, r.y0);
+		_allocation = r;
+	}
 }
-
-void
-Item::size_request (double& w, double& h) const
-{
-	Rect r (bounding_box());
-
-	w = std::max (requested_width, r.width());
-	h = std::max (requested_height, r.height());
-}
-
-void
-Item::set_size_request (double w, double h)
-{
-	/* allow reset to zero or require that both are positive */
-
-	begin_change ();
-	requested_width = w;
-	requested_height = h;
-	_bounding_box_dirty = true;
-	end_change ();
-}
-
 
 /** @return Bounding box in this item's coordinates */
 ArdourCanvas::Rect
-Item::bounding_box (bool for_own_purposes) const
+Item::bounding_box () const
 {
 	if (_bounding_box_dirty) {
 		compute_bounding_box ();
 		assert (!_bounding_box_dirty);
 		add_child_bounding_boxes ();
-	}
-
-	if (!for_own_purposes) {
-		if (_allocation) {
-			return _allocation;
-		}
 	}
 
 	return _bounding_box;
@@ -682,7 +667,7 @@ Item::end_change ()
 		_canvas->item_changed (this, _pre_change_bounding_box);
 
 		if (_parent) {
-			_parent->child_changed ();
+			_parent->child_changed (_pre_change_bounding_box != _bounding_box);
 		}
 	}
 }
@@ -782,6 +767,9 @@ Item::covers (Duple const & point) const
 
 /* nesting/grouping API */
 
+static bool debug_render = false;
+#define CANVAS_DEBUG 1
+
 void
 Item::render_children (Rect const & area, Cairo::RefPtr<Cairo::Context> context) const
 {
@@ -793,10 +781,10 @@ Item::render_children (Rect const & area, Cairo::RefPtr<Cairo::Context> context)
 	std::vector<Item*> items = _lut->get (area);
 
 #ifdef CANVAS_DEBUG
-	if (DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
-		cerr << string_compose ("%1%7 %2 @ %7 render %5 @ %6 %3 items out of %4\n",
-					_canvas->render_indent(), (name.empty() ? string ("[unnamed]") : name), items.size(), _items.size(), area, _position, this,
-					whatami());
+	if (debug_render || DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
+		cerr << string_compose ("%1%8 %2 @ %7 render %5 @ %6 %3 items out of %4\n",
+		                        _canvas->render_indent(), (name.empty() ? string ("[unnamed]") : name), items.size(), _items.size(), area, _position, 0 /* this */,
+		                        whatami());
 	}
 #endif
 
@@ -806,7 +794,7 @@ Item::render_children (Rect const & area, Cairo::RefPtr<Cairo::Context> context)
 
 		if (!(*i)->visible ()) {
 #ifdef CANVAS_DEBUG
-			if (DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
+			if (debug_render || DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
 				cerr << _canvas->render_indent() << "Item " << (*i)->whatami() << " [" << (*i)->name << "] invisible - skipped\n";
 			}
 #endif
@@ -817,7 +805,7 @@ Item::render_children (Rect const & area, Cairo::RefPtr<Cairo::Context> context)
 
 		if (!item_bbox) {
 #ifdef CANVAS_DEBUG
-			if (DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
+			if (debug_render || DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
 				cerr << _canvas->render_indent() << "Item " << (*i)->whatami() << " [" << (*i)->name << "] empty - skipped\n";
 			}
 #endif
@@ -831,15 +819,13 @@ Item::render_children (Rect const & area, Cairo::RefPtr<Cairo::Context> context)
 			Rect draw = d;
 			if (draw.width() && draw.height()) {
 #ifdef CANVAS_DEBUG
-				if (DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
+				if (debug_render || DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
 					if (dynamic_cast<Container*>(*i) == 0) {
 						cerr << _canvas->render_indent() << "render "
 						     << ' '
 						     << (*i)
 						     << ' '
-						     << (*i)->whatami()
-						     << ' '
-						     << (*i)->name
+						     << (*i)->whoami()
 						     << " item "
 						     << item_bbox
 						     << " window = "
@@ -860,7 +846,7 @@ Item::render_children (Rect const & area, Cairo::RefPtr<Cairo::Context> context)
 		} else {
 
 #ifdef CANVAS_DEBUG
-			if (DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
+			if (debug_render || DEBUG_ENABLED(PBD::DEBUG::CanvasRender)) {
 				cerr << string_compose ("%1skip render of %2 %3, no intersection between %4 and %5\n", _canvas->render_indent(), (*i)->whatami(),
 							(*i)->name, item, area);
 			}
@@ -871,6 +857,7 @@ Item::render_children (Rect const & area, Cairo::RefPtr<Cairo::Context> context)
 
 	--render_depth;
 }
+#undef CANVAS_DEBUG
 
 void
 Item::prepare_for_render_children (Rect const & area) const
@@ -912,7 +899,7 @@ Item::prepare_for_render_children (Rect const & area) const
 void
 Item::add_child_bounding_boxes (bool include_hidden) const
 {
-	Rect self;
+Rect self;
 	Rect bbox;
 	bool have_one = false;
 
@@ -1006,6 +993,7 @@ Item::remove (Item* i)
 	}
 
 	i->unparent ();
+	i->set_layout_sensitive (false);
 	_items.remove (i);
 	invalidate_lut ();
 	_bounding_box_dirty = true;
@@ -1117,13 +1105,13 @@ Item::invalidate_lut () const
 }
 
 void
-Item::child_changed ()
+Item::child_changed (bool bbox_changed)
 {
 	invalidate_lut ();
-	_bounding_box_dirty = true;
+	_bounding_box_dirty = bbox_changed;
 
 	if (_parent) {
-		_parent->child_changed ();
+		_parent->child_changed (bbox_changed);
 	}
 }
 
@@ -1185,14 +1173,8 @@ Item::dump (ostream& o) const
 {
 	ArdourCanvas::Rect bb = bounding_box();
 
-	o << _canvas->indent() << whatami() << ' ' << this << " self-Visible ? " << self_visible() << " visible ? " << visible();
-	o << " @ " << position();
-
-#ifdef CANVAS_DEBUG
-	if (!name.empty()) {
-		o << ' ' << name;
-	}
-#endif
+	o << _canvas->indent() << whoami() << ' ' << this << " self-Visible ? " << self_visible() << " visible ? " << visible() << " layout " << layout_sensitive()
+	  << " @ " << position();
 
 	if (bb) {
 		o << endl << _canvas->indent() << "\tbbox: " << bb;
@@ -1240,3 +1222,53 @@ ArdourCanvas::operator<< (ostream& o, const Item& i)
 	i.dump (o);
 	return o;
 }
+<<<<<<< HEAD
+=======
+
+void
+Item::set_intrinsic_size (Distance w, Distance h)
+{
+	_intrinsic_width = w;
+	_intrinsic_height = h;
+}
+
+void
+Item::preferred_size (Duple& minimum, Duple& natural) const
+{
+	/* this is the default mechanism to get a preferred size. It assumes
+	 * items whose dimensions are essentially fixed externally by calling
+	 * various methods that set the limits, and those same limits are used
+	 * when computing the bounding box. So ... just get the bounding box,
+	 * and use the dimensions it specifies.
+	 *
+	 * Note that items that fit this assumption also cannot have their size
+	 * adjusted by a container that they are placed in, so their miniumum
+	 * and natural sizes are the same.
+	 */
+
+	if (_intrinsic_height < 0 && _intrinsic_width < 0) {
+
+		/* intrinsic size untouched ... fall back on
+		   arbitrary default (small) sizes.
+		*/
+
+		natural.x = 2;
+		natural.y = 2;
+
+	} else {
+
+		natural.x = _intrinsic_width;
+		natural.y = _intrinsic_height;
+
+	}
+
+	minimum.x = 1;
+	minimum.y = 1;
+}
+
+void
+Item::set_layout_sensitive (bool yn)
+{
+	_layout_sensitive = yn;
+}
+>>>>>>> constraint-packer

@@ -45,6 +45,16 @@ typedef double Distance;
 
 extern LIBCANVAS_API Coord const COORD_MAX;
 
+enum Orientation {
+	Horizontal = 0x1,
+	Vertical = 0x2,
+};
+
+enum Dimension {
+	Width = 0x1,
+	Height = 0x2
+};
+
 inline Coord
 canvas_safe_add (Coord a, Coord b)
 {
@@ -70,6 +80,11 @@ struct LIBCANVAS_API Duple
 
 	Coord x;
 	Coord y;
+
+	/* alias */
+
+	Coord width() const { return x; }
+	Coord height() const { return y; }
 
 	Duple translate (const Duple& t) const throw() {
 		return Duple (canvas_safe_add (x, t.x), canvas_safe_add (y, t.y));
@@ -182,6 +197,13 @@ struct LIBCANVAS_API Rect
 			y0 != o.y0 ||
 			y1 != o.y1;
 	}
+};
+
+enum PackOptions {
+	PackExpand = 0x1,
+	PackFill = 0x2,
+	PackFromStart = 0x4,
+	PackFromEnd = 0x8
 };
 
 extern LIBCANVAS_API std::ostream & operator<< (std::ostream &, Rect const &);

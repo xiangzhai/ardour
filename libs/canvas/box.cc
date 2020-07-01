@@ -262,7 +262,7 @@ Box::layout ()
 }
 
 void
-Box::child_changed ()
+Box::child_changed (bool bbox_changed)
 {
 	/* catch visibility and size changes */
 
@@ -270,7 +270,8 @@ Box::child_changed ()
 		return;
 	}
 
-	Item::child_changed ();
+	Item::child_changed (bbox_changed);
+
 	reposition_children ();
 }
 

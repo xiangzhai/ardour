@@ -48,6 +48,7 @@ public:
 	Distance extent() const { return _extent; }
 
 	void add_coord (Coord, Distance, Gtkmm2ext::Color);
+
 	void clear ();
 
 	struct Line {

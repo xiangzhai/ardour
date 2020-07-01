@@ -40,6 +40,7 @@ namespace ArdourCanvas
 
 class Canvas;
 class ScrollGroup;
+class ConstrainedItem;
 
 /** The parent class for anything that goes on the canvas.
  *
@@ -145,18 +146,19 @@ public:
 
 	ScrollGroup* scroll_parent() const { return _scroll_parent; }
 
-	virtual void size_request (double& w, double& h) const;
-	void set_size_request (double w, double h);
+	/* layout-related methods */
 
-	void size_allocate (Rect const&);
+	virtual void preferred_size (Duple& minimum, Duple& natural) const;
+	virtual void size_allocate (Rect const&);
+	Rect allocation() const { return _allocation; }
+	void set_layout_sensitive (bool);
+	bool layout_sensitive () const { return _layout_sensitive; }
+	virtual Duple intrinsic_size() const { return Duple (_intrinsic_width, _intrinsic_height); }
+	virtual void set_intrinsic_size (Distance, Distance);
 
 	/** bounding box is the public API to get the size of the item.
-	 * If @param for_own_purposes is false, then it will return the
-	 * allocated bounding box (if there is one) in preference to the
-	 * one that would naturally be computed by the item.
 	 */
-	Rect bounding_box (bool for_own_purposes = false) const;
-	Rect allocation() const { return _allocation; }
+	Rect bounding_box () const;
 
 	Coord height() const;
 	Coord width() const;
@@ -214,15 +216,22 @@ public:
 	/* nested item ("grouping") API */
 	virtual void add (Item *);
 	virtual void add_front (Item *);
+<<<<<<< HEAD
 	void remove (Item *);
+=======
+	virtual void remove (Item *);
+	/* XXX this should become virtual also */
+>>>>>>> constraint-packer
 	void clear (bool with_delete = false);
+
 	std::list<Item*> const & items () const {
 		return _items;
 	}
+
 	void raise_child_to_top (Item *);
 	void raise_child (Item *, int);
 	void lower_child_to_bottom (Item *);
-	virtual void child_changed ();
+	virtual void child_changed (bool bbox_changed);
 
 	static int default_items_per_cell;
 
@@ -250,6 +259,9 @@ public:
 
 #ifdef CANVAS_DEBUG
 	std::string name;
+	std::string whoami() const { return whatami() + '/' + name; }
+#else
+	std::string whoami() const { return whatami(); }
 #endif
 
 #ifdef CANVAS_COMPATIBILITY
@@ -316,6 +328,9 @@ public:
 	/** true if _bounding_box might be out of date, false if its definitely not */
 	mutable bool _bounding_box_dirty;
 	Rect _allocation;
+	bool _layout_sensitive;
+	Distance _intrinsic_width;
+	Distance _intrinsic_height;
 
 	/* XXX: this is a bit grubby */
 	std::map<std::string, void *> _data;
@@ -335,6 +350,7 @@ public:
 	void prepare_for_render_children (Rect const & area) const;
 
 	Duple scroll_offset() const;
+  public:
 	Duple position_offset() const;
 
 	bool _resize_queued;
