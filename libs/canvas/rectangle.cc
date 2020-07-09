@@ -85,7 +85,6 @@ Rectangle::render (Rect const & area, Cairo::RefPtr<Cairo::Context> context) con
 	   part of item_to_canvas()
 	*/
 	Rect self (item_to_window (_rect));
-
 	const Rect draw = self.intersection (area);
 
 	if (!draw) {
@@ -299,11 +298,15 @@ Rectangle::set_corner_radius (double r)
 void
 Rectangle::size_allocate (Rect const & r)
 {
-	/* leave position alone */
-
 	_allocation = r;
 
 	if (_layout_sensitive) {
-		set (r);
+		/* set position, and then set the _rect member with values that
+		   use _position as the origin.
+		*/
+		_position = Duple (r.x0, r.y0);
+		Rect r2 (0, 0, r.x1 - r.x0, r.y1 - r.y0);
+		set (r2);
 	}
 }
+
