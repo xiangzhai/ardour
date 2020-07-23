@@ -2611,7 +2611,7 @@ static bool
 write_position(LV2_Atom_Forge*     forge,
                LV2_Evbuf*          buf,
                const TempoMetric&  t,
-               Timecode::BBT_Time& bbt,
+               Temporal::BBT_Time& bbt,
                double              speed,
                double              time_scale,
                double              bpm,
@@ -2630,8 +2630,7 @@ write_position(LV2_Atom_Forge*     forge,
 	lv2_atom_forge_key(forge, urids.time_speed);
 	lv2_atom_forge_float(forge, speed);
 	lv2_atom_forge_key(forge, urids.time_barBeat);
-	lv2_atom_forge_float(forge, bbt.beats - 1 +
-	                     (bbt.ticks / Timecode::BBT_Time::ticks_per_beat));
+	lv2_atom_forge_float(forge, bbt.beats - 1 + (bbt.ticks / (float) Temporal::ticks_per_beat));
 	lv2_atom_forge_key(forge, urids.time_bar);
 	lv2_atom_forge_long(forge, bbt.bars - 1);
 	lv2_atom_forge_key(forge, urids.time_beatUnit);
@@ -2649,8 +2648,7 @@ write_position(LV2_Atom_Forge*     forge,
 	lv2_atom_forge_property_head(forge, urids.time_speed, 0);
 	lv2_atom_forge_float(forge, speed);
 	lv2_atom_forge_property_head(forge, urids.time_barBeat, 0);
-	lv2_atom_forge_float(forge, bbt.beats - 1 +
-	                     (bbt.ticks / Timecode::BBT_Time::ticks_per_beat));
+	lv2_atom_forge_float(forge, bbt.beats - 1 + (bbt.ticks / (float) Temporal::ticks_per_beat));
 	lv2_atom_forge_property_head(forge, urids.time_bar, 0);
 	lv2_atom_forge_long(forge, bbt.bars - 1);
 	lv2_atom_forge_property_head(forge, urids.time_beatUnit, 0);
@@ -2768,12 +2766,12 @@ LV2Plugin::connect_and_run(BufferSet& bufs,
 
 			if (valid && (flags & PORT_INPUT)) {
 				if ((flags & PORT_POSITION)) {
-					Timecode::BBT_Time bbt (tmap.bbt_at_sample (start));
+					Temporal::BBT_Time bbt (tmap.bbt_at_sample (start));
 					double time_scale = Port::speed_ratio ();
 					double bpm = tmap.tempo_at_sample (start).note_types_per_minute();
 					double beatpos = (bbt.bars - 1) * tmetric.meter().divisions_per_bar()
-					               + (bbt.beats - 1)
-					               + (bbt.ticks / Timecode::BBT_Time::ticks_per_beat);
+						+ (bbt.beats - 1)
+						+ (bbt.ticks / Temporal::ticks_per_beat);
 					beatpos *= tmetric.meter().note_divisor() / 4.0;
 					if (start != _next_cycle_start ||
 							speed != _next_cycle_speed ||
@@ -2812,7 +2810,7 @@ LV2Plugin::connect_and_run(BufferSet& bufs,
 					} else {
 						assert (metric);
 						tmetric.set_metric(metric);
-						Timecode::BBT_Time bbt;
+						Temporal::BBT_Time bbt;
 						bbt = tmap.bbt_at_sample (metric->sample());
 						double bpm = tmap.tempo_at_sample (start/*XXX*/).note_types_per_minute();
 						write_position(&_impl->forge, _ev_buffers[port_index],
@@ -3121,10 +3119,10 @@ LV2Plugin::connect_and_run(BufferSet& bufs,
 		 */
 		TempoMetric t = tmap.metric_at(start);
 		_current_bpm = tmap.tempo_at_sample (start).note_types_per_minute();
-		Timecode::BBT_Time bbt (tmap.bbt_at_sample (start));
+		Temporal::BBT_Time bbt (tmap.bbt_at_sample (start));
 		double beatpos = (bbt.bars - 1) * t.meter().divisions_per_bar()
-		               + (bbt.beats - 1)
-		               + (bbt.ticks / Timecode::BBT_Time::ticks_per_beat);
+			+ (bbt.beats - 1)
+			+ (bbt.ticks / Temporal::ticks_per_beat);
 		beatpos *= tmetric.meter().note_divisor() / 4.0;
 		_next_cycle_beat = beatpos + nframes * speed * _current_bpm / (60.f * _session.sample_rate());
 	}
