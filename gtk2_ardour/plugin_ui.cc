@@ -66,8 +66,16 @@
 #include "ardour/lv2_plugin.h"
 #include "lv2_plugin_ui.h"
 #endif
+
 #ifdef VST3_SUPPORT
 #include "ardour/vst3_plugin.h"
+# ifdef PLATFORM_WINDOWS
+#  include "vst3_hwnd_plugin_ui.h"
+# elif defined (__APPLE__)
+#  include "vst3_nsview_plugin_ui.h"
+# else
+#  include "vst3_x11_plugin_ui.h"
+# endif
 #endif
 
 #include "ardour_window.h"
@@ -140,7 +148,7 @@ PluginUIWindow::PluginUIWindow (
 			break;
 
 		case ARDOUR::VST3:
-			have_gui = false; // TODO
+			have_gui = create_vst3_editor (insert);
 			break;
 
 		default:
@@ -321,6 +329,37 @@ PluginUIWindow::create_mac_vst_editor (boost::shared_ptr<PluginInsert>)
 
 	Application::instance()->ActivationChanged.connect (mem_fun (*this, &PluginUIWindow::app_activated));
 
+	return true;
+#endif
+}
+
+bool
+#ifdef VST3_SUPPORT
+PluginUIWindow::create_vst3_editor (boost::shared_ptr<PluginInsert> insert)
+#else
+PluginUIWindow::create_vst3_editor (boost::shared_ptr<PluginInsert>)
+#endif
+{
+#ifndef VST3_SUPPORT
+	return false;
+#else
+	boost::shared_ptr<VST3Plugin> vst3;
+	if ((vst3 = boost::dynamic_pointer_cast<VST3Plugin> (insert->plugin())) == 0) {
+		error << _("create_vst3_editor called on non-VST3 plugin") << endmsg;
+		throw failed_constructor ();
+	} else {
+#ifdef PLATFORM_WINDOWS
+		VST3X11PluginUI* pui = new VST3HWNDPluginUI (insert, vst3);
+#elif defined (__APPLE__)
+		VST3X11PluginUI* pui = new VST3NSViewPluginUI (insert, vst3);
+#else
+		VST3X11PluginUI* pui = new VST3X11PluginUI (insert, vst3);
+#endif
+		_pluginui = pui;
+		_pluginui->KeyboardFocused.connect (sigc::mem_fun (*this, &PluginUIWindow::keyboard_focused));
+		add (*pui);
+		pui->package (*this);
+	}
 	return true;
 #endif
 }
